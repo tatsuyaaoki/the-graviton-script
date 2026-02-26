@@ -1,6 +1,6 @@
 /**
  * Module: Main Application Entry Point (app.js)
- * Description: Orchestrates Spatial Barba.js transitions.
+ * Description: Orchestrates Spatial Barba.js transitions with debug telemetry.
  */
 
 import { initHexEngine, handleHexResize } from './hex-engine.js';
@@ -12,7 +12,6 @@ export const devLog = (...args) => { if (IS_DEV) console.log(...args); };
 
 /* ==========================================================================
    1. SPATIAL ROUTE MAP
-   Defines the physical Left-to-Right layout of the website.
    ========================================================================== */
 const routeMap = ['/', '/catalog', '/glitch']; 
 
@@ -24,12 +23,11 @@ function getRouteDirection(fromPath, toPath) {
     if (fromIdx === -1) fromIdx = 0;
     if (toIdx === -1) toIdx = 1;
 
-    // Returns 1 if moving Right, -1 if moving Left
     return toIdx >= fromIdx ? 1 : -1;
 }
 
 /* ==========================================================================
-   2. CANVAS BOOTSTRAP & HOVER TRIGGERS (Background Layer)
+   2. CANVAS BOOTSTRAP & HOVER
    ========================================================================== */
 function bootstrapCanvas() {
     if (document.getElementById('hexCanvas')) return;
@@ -43,7 +41,7 @@ bootstrapCanvas();
 
 document.addEventListener('mouseover', (e) => {
     if (window.innerWidth > 991 && e.target instanceof Element && e.target.closest('.catalog-card_component')) {
-        devLog('[GRV:HEX] Card hovered - Hex background engaged');
+        // devLog('[GRV:HEX] Card hovered'); // Disabled temporarily to reduce log noise
     }
 });
 
@@ -60,18 +58,17 @@ function initBarba() {
             name: 'spatial-slide',
 
             leave(data) {
+                devLog('BARBA: leave() triggered');
                 const done = this.async();
                 const c = data.current.container;
                 const dir = getRouteDirection(data.current.url.path, data.next.url.path);
                 
-                // Save direction for the enter hook
                 data.next.direction = dir; 
 
                 if (c.getAttribute('data-barba-namespace') === 'catalog') {
                     PortfolioGallery.teardown();
                 }
 
-                // Slide the old page OUT to the opposite direction of travel
                 gsap.to(c, { 
                     x: `${-100 * dir}vw`, 
                     opacity: 0, 
@@ -80,25 +77,27 @@ function initBarba() {
                     onComplete: () => {
                         window.scrollTo(0, 0);
                         gsap.set(c, { display: 'none' });
+                        devLog('[GRV:DEBUG] Old container slid out and hidden.');
                         done();
                     }
                 });
             },
 
             enter(data) {
+                devLog('BARBA: enter() triggered');
                 const c = data.next.container;
                 const headerEl = document.querySelector('.header');
                 const headerH = headerEl ? headerEl.offsetHeight : 50;
-                
-                // Retrieve direction calculated in leave() hook, default to 1 (Right)
                 const dir = data.next.direction || 1; 
 
-                // Start the new page OFFSCREEN in the direction it came from
                 gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: `${100 * dir}vw`, opacity: 1 });
 
-                // Initialize HTML & Webflow
-                if (c.querySelector('.catalog-list_item')) {
-                    // Pass true to skip instant intro, let Barba finish sliding first
+                // Check if we are actually loading a catalog page
+                const isCatalog = c.querySelector('.catalog-list_item') !== null;
+                devLog(`[GRV:DEBUG] Is this a Catalog page? ${isCatalog ? 'YES' : 'NO'}`);
+
+                if (isCatalog) {
+                    devLog('[GRV:DEBUG] Initializing PortfolioGallery state (skipIntro=true)');
                     PortfolioGallery.init(c, true);
                 }
 
@@ -110,21 +109,22 @@ function initBarba() {
                         if (window.Webflow.require('ix2')) window.Webflow.require('ix2').init();
                         document.dispatchEvent(new Event('readystatechange'));
                     }
-                } catch (e) {
-                    devLog('BARBA: enter init error:', e);
-                }
+                } catch (e) {}
 
-                // Slide the new page into the center
                 gsap.to(c, { 
                     x: '0vw', 
                     duration: 0.8, 
                     ease: "power3.out",
                     onComplete: () => {
+                        devLog('BARBA: transition complete');
                         gsap.set(c, { clearProps: 'position,top,left,width,zIndex,x,opacity' });
                         updateHUD(); 
-                        // Once the page is locked in, trigger the internal spatial intro
-                        if (c.querySelector('.catalog-list_item')) {
-                            PortfolioGallery.playIntro(dir);
+
+                        if (isCatalog) {
+                            devLog('[GRV:DEBUG] Triggering playIntro() sequence...');
+                            PortfolioGallery.playIntro(c, dir); // Passing container 'c' to safely scope queries
+                        } else {
+                            devLog('[GRV:DEBUG] Not a catalog page. Intro skipped.');
                         }
                     }
                 });
@@ -150,8 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (canvas) { initHexEngine(canvas); window.addEventListener('resize', handleHexResize); }
 
     const container = document.querySelector('[data-barba-namespace="catalog"]');
-    // If user lands directly on Catalog (no Barba), default to dir=1
-    if (container) PortfolioGallery.init(container, false, 1);
+    if (container) {
+        devLog('[GRV:DEBUG] Hard load detected. Firing direct init().');
+        PortfolioGallery.init(container, false, 1);
+    }
 
     initBarba();
 });
