@@ -1,6 +1,7 @@
 /**
  * Module: Main Application Entry Point (app.js)
  * Description: Orchestrates Spatial Barba.js transitions.
+ * Update: Concurrent spatial UI triggering.
  */
 
 import { initHexEngine, handleHexResize } from './hex-engine.js';
@@ -16,18 +17,15 @@ export const devLog = (...args) => { if (IS_DEV) console.log(...args); };
 const routeMap = ['/', '/catalog', '/glitch']; 
 
 function getRouteDirection(fromPath, toPath) {
-    // Strip trailing slashes and queries for exact matching
     const nFrom = fromPath === '/' ? '/' : fromPath.replace(/\/$/, '').split('?')[0];
     const nTo = toPath === '/' ? '/' : toPath.replace(/\/$/, '').split('?')[0];
-    
     let fromIdx = routeMap.indexOf(nFrom);
     let toIdx = routeMap.indexOf(nTo);
 
-    // Fallbacks if route isn't strictly defined
     if (fromIdx === -1) fromIdx = 0;
     if (toIdx === -1) toIdx = 1;
 
-    // Return 1 (moving Right/Forwards), -1 (moving Left/Backwards)
+    // 1 = Slide Left (Entering from Right) | -1 = Slide Right (Entering from Left)
     return toIdx >= fromIdx ? 1 : -1;
 }
 
@@ -71,7 +69,6 @@ function initBarba() {
                     PortfolioGallery.teardown();
                 }
 
-                // If moving forwards (dir=1), old page slides Left (-100vw).
                 gsap.to(c, { 
                     x: `${-100 * dir}vw`, 
                     opacity: 0, 
@@ -90,18 +87,13 @@ function initBarba() {
                 const headerEl = document.querySelector('.header');
                 const headerH = headerEl ? headerEl.offsetHeight : 50;
                 
-                // RECALCULATE SECURELY: Do not rely on data.next object retention
                 const dir = getRouteDirection(data.current.url.path, data.next.url.path); 
                 devLog(`[GRV:ROUTER] Transitioning. Direction = ${dir}`);
 
-                // If moving forwards (dir=1), new page starts on Right (100vw)
                 gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: `${100 * dir}vw`, opacity: 1 });
 
                 const isCatalog = c.querySelector('.catalog-list_item') !== null;
-
-                if (isCatalog) {
-                    PortfolioGallery.init(c, true, dir);
-                }
+                if (isCatalog) PortfolioGallery.init(c, true, dir);
 
                 try {
                     if (window.Webflow) {
@@ -113,6 +105,7 @@ function initBarba() {
                     }
                 } catch (e) {}
 
+                // SIMULTANEOUS LAUNCH: The page slide and the component build run at the exact same time
                 gsap.to(c, { 
                     x: '0vw', 
                     duration: 0.8, 
@@ -120,12 +113,12 @@ function initBarba() {
                     onComplete: () => {
                         gsap.set(c, { clearProps: 'position,top,left,width,zIndex,x,opacity' });
                         updateHUD(); 
-
-                        if (isCatalog) {
-                            PortfolioGallery.playIntro(c, dir); 
-                        }
                     }
                 });
+
+                if (isCatalog) {
+                    PortfolioGallery.playIntro(c, dir); 
+                }
             }
         }]
     });
@@ -148,6 +141,5 @@ document.addEventListener('DOMContentLoaded', () => {
     if (container) {
         PortfolioGallery.init(container, false, 1);
     }
-
     initBarba();
 });

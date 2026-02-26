@@ -1,11 +1,11 @@
 /**
  * Module: Portfolio Gallery
- * Description: Manages Spatial Entrance Sequences, Filtering, and Dropdowns.
+ * Description: Manages Concurrent Spatial Sequences, Filtering, and Dropdowns.
  */
 
 export const PortfolioGallery = (() => {
     const state = { activeYear: 'All', activeCat: 'All', activeCardIndex: null, lastPos: null, isListView: false, listeners: [], _initialised: false, _hoverFadeTimer: null, resizeTimer: null, isTransitioning: false, _lastBreakpoint: null };
-    const CONFIG = { timing: { cardIntroDelay: 0, cardIntroStagger: 0.15, maxDelay: 0.8 }, styling: { lineDuration: 0.4, textDuration: 0.5, textStagger: 0.1, imageFadeDuration: 0.6, easeMain: 'power3.out', easeLines: 'power2.inOut' }, colors: { primary: 'var(--grv-primary, #0d9488)', contrast: 'var(--grv-contrast, #e2572b)', activeWhite: 'rgba(255, 255, 255, 1)', disabledGrey: 'rgba(255, 255, 255, 0.25)' } };
+    const CONFIG = { timing: { cardIntroDelay: 0, cardIntroStagger: 0.1, maxDelay: 0.8 }, styling: { lineDuration: 0.4, textDuration: 0.5, textStagger: 0.1, imageFadeDuration: 0.6, easeMain: 'power3.out', easeLines: 'power2.inOut' }, colors: { primary: 'var(--grv-primary, #0d9488)', contrast: 'var(--grv-contrast, #e2572b)', activeWhite: 'rgba(255, 255, 255, 1)', disabledGrey: 'rgba(255, 255, 255, 0.25)' } };
     
     const devLog = (...args) => { if (window.location.hostname === 'localhost' || window.location.hostname.includes('webflow.io')) console.log(...args); };
     let els = {};
@@ -79,7 +79,6 @@ export const PortfolioGallery = (() => {
             const top = getLineParts(topWrapper);
             const bottom = getLineParts(bottomWrapper);
             
-            // Your exact requested sequence
             const img = gsap.utils.toArray(card.querySelectorAll('.catalog-card_image'));
             const content = gsap.utils.toArray(card.querySelectorAll('.catalog-card_content'));
             const details = gsap.utils.toArray(card.querySelectorAll('.card_details_container'));
@@ -87,7 +86,6 @@ export const PortfolioGallery = (() => {
 
             const startX = dir * 40; 
 
-            // Safely reset states without breaking Flexbox
             if(top.c.length) gsap.set([top.c, bottom.c], { scaleX: 0 });
             if(top.l.length) gsap.set([top.l, bottom.l], { left: '50%', opacity: 0 });
             if(top.r.length) gsap.set([top.r, bottom.r], { right: '50%', opacity: 0 });
@@ -96,10 +94,11 @@ export const PortfolioGallery = (() => {
             if(details.length) gsap.set(details, { opacity: 0, x: startX });
             if(hoverEl) gsap.set(hoverEl, { display: 'none', opacity: 0 });
 
+            // Ensure cards start animating ALONGSIDE the global sequence
             const delay = Math.min(CONFIG.timing.cardIntroDelay + i * CONFIG.timing.cardIntroStagger, CONFIG.timing.maxDelay);
             const tl = gsap.timeline({ delay, onComplete: () => { card.style.pointerEvents = 'auto'; } });
 
-            // 1. Horizontal Lines First
+            // Horizontal Lines First
             if(top.l.length) tl.to(top.l, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0);
             if(top.r.length) tl.to(top.r, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0);
             if(top.c.length) tl.to(top.c, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0.2);
@@ -110,7 +109,6 @@ export const PortfolioGallery = (() => {
                 if(bottom.c.length) tl.to(bottom.c, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0.2);
             }
 
-            // 2. Image -> 3. Content -> 4. Details (Staggered respecting direction)
             tl.to(img, { opacity: 1, x: 0, duration: CONFIG.styling.imageFadeDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, 0.3);
             tl.to(content, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, 0.4);
             tl.to(details, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, 0.5);
@@ -121,6 +119,25 @@ export const PortfolioGallery = (() => {
     const applyFilters = () => { /* ... */ };
     const setViewMode = (isList) => { /* ... */ };
     const setupCustomDropdowns = (context) => { /* ... */ };
+
+    // --- NEW: HTML Text Splitter for Typewriter Effect ---
+    const splitTextNodes = (element) => {
+        if (!element || element.dataset.split === 'true') return;
+        element.dataset.split = 'true';
+        let newHTML = '';
+        element.childNodes.forEach(node => {
+            if (node.nodeType === 3) { // Text Node
+                const chars = node.textContent.split('');
+                chars.forEach(c => {
+                    if (c.trim() === '') newHTML += `<span>&nbsp;</span>`;
+                    else newHTML += `<span style="opacity:0">${c}</span>`;
+                });
+            } else if (node.nodeName.toLowerCase() === 'br') {
+                newHTML += '<br/>';
+            }
+        });
+        element.innerHTML = newHTML;
+    };
 
     const init = (context, skipIntro = false, overrideDir = 1) => {
         if (state._initialised) teardown();
@@ -139,23 +156,22 @@ export const PortfolioGallery = (() => {
         };
 
         if (skipIntro) {
-            gsap.set(context.querySelectorAll('.header_paragraph'), { opacity: 0 });
-            gsap.set(context.querySelectorAll('.catalog-header_heading .line_v-c'), { scaleY: 0 });
-            gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c'), { scaleX: 0 });
-            gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_l'), { opacity: 0, left: '50%' });
-            gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r'), { opacity: 0, right: '50%' });
+            // Pre-split paragraph for typewriter
+            const p = context.querySelector('.header_paragraph');
+            if(p) { splitTextNodes(p); gsap.set(p, { opacity: 1 }); }
 
-            const images = gsap.utils.toArray(context.querySelectorAll('.catalog-card_image'));
-            const textEls = gsap.utils.toArray(context.querySelectorAll('.catalog-card_content, .card_details_container'));
-            if(images.length) gsap.set(images, { opacity: 0 });
-            if(textEls.length) gsap.set(textEls, { opacity: 0 }); 
+            // Vertical Line Resets (Now obeying Caps logic)
+            gsap.set(context.querySelectorAll('.line_v-c'), { scaleY: 0 });
+            gsap.set(context.querySelectorAll('.line_v-cap_t'), { opacity: 0, top: '50%' });
+            gsap.set(context.querySelectorAll('.line_v-cap_b'), { opacity: 0, bottom: '50%' });
 
-            const lineCenters = gsap.utils.toArray(context.querySelectorAll('.catalog-card_component .line_h-c'));
-            const lineCapsL = gsap.utils.toArray(context.querySelectorAll('.catalog-card_component .line_h-cap_l'));
-            const lineCapsR = gsap.utils.toArray(context.querySelectorAll('.catalog-card_component .line_h-cap_r'));
-            if (lineCenters.length) gsap.set(lineCenters, { scaleX: 0 });
-            if (lineCapsL.length) gsap.set(lineCapsL, { opacity: 0, left: '50%' });
-            if (lineCapsR.length) gsap.set(lineCapsR, { opacity: 0, right: '50%' });
+            // Horizontal Line Resets
+            gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c, .catalog-card_component .line_h-c'), { scaleX: 0 });
+            gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_l, .catalog-card_component .line_h-cap_l'), { opacity: 0, left: '50%' });
+            gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r, .catalog-card_component .line_h-cap_r'), { opacity: 0, right: '50%' });
+
+            // Cards Content Resets
+            gsap.set(context.querySelectorAll('.catalog-card_image, .catalog-card_content, .card_details_container'), { opacity: 0 }); 
         }
 
         els.mainItems.forEach(item => {
@@ -181,19 +197,57 @@ export const PortfolioGallery = (() => {
         state.isTransitioning = false;
         const tl = gsap.timeline();
 
-        // 1. Title Vertical Line 
-        const vLine = context.querySelector('.catalog-header_heading .line_v-c');
-        if (vLine) tl.to(vLine, { scaleY: 1, duration: 0.5, ease: "power2.out" }, 0);
+        // 1. All Vertical Lines (Caps slide out -> Center scales)
+        const vCenters = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-c'));
+        const vCapsT = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-cap_t'));
+        const vCapsB = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-cap_b'));
 
-        // 2. Paragraph CSS Clip-Path Typewriter
+        if (vCapsT.length) tl.to(vCapsT, { top: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0); // Start at 0
+        if (vCapsB.length) tl.to(vCapsB, { bottom: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0); // Start at 0
+        if (vCenters.length) tl.to(vCenters, { scaleY: 1, duration: 0.4, ease: "power2.out" }, 0.2);
+
+        // 2. True Typewriter Effect
         const p = context.querySelector('.header_paragraph');
         if (p) {
-            gsap.set(p, { opacity: 1 }); 
-            const clipStart = dir === 1 ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)';
-            gsap.fromTo(p, { clipPath: clipStart }, { clipPath: 'inset(0 0% 0 0)', duration: 1.0, ease: "steps(30)" }, 0.2);
+            const chars = p.querySelectorAll('span');
+            // Starts simultaneously at 0
+            gsap.to(chars, { opacity: 1, duration: 0.05, stagger: 0.02, ease: "none" }, 0);
         }
 
-        // 3. Card Header Main Horizontal Lines
+        // 3. Card Header Horizontal Lines
         const headerHCenters = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c'));
         const headerHL = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_l'));
-        const headerHR = gsap.utils.toArray
+        const headerHR = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r'));
+        
+        if (headerHL.length) tl.to(headerHL, { left: '0%', opacity: 1, duration: 0.5, ease: "power2.out" }, 0); // Start at 0
+        if (headerHR.length) tl.to(headerHR, { right: '0%', opacity: 1, duration: 0.5, ease: "power2.out" }, 0); // Start at 0
+        if (headerHCenters.length) tl.to(headerHCenters, { scaleX: 1, duration: 0.5, ease: "power2.out" }, 0.2);
+
+        // 4. Spatial Stagger of Toolbar
+        const headerTargets = [
+            context.querySelector('#vertical_line_filter_1'),
+            context.querySelector('#filter_item_1'),
+            context.querySelector('#vertical_line_filter_2'),
+            context.querySelector('#filter_item_2'),
+            context.querySelector('#vertical_line_filter_3'),
+            context.querySelector('#vertical_line_view_2'),
+            context.querySelector('.list-btn'),
+            context.querySelector('.grid-btn'),
+            context.querySelector('#vertical_line_view_3')
+        ].filter(Boolean);
+
+        if (headerTargets.length) {
+            const targets = dir === -1 ? [...headerTargets].reverse() : headerTargets;
+            const startX = dir * 30; 
+            
+            gsap.set(targets, { x: startX, opacity: 0 });
+            // Slide in simultaneously starting at 0
+            tl.to(targets, { opacity: 1, x: 0, duration: 0.4, stagger: 0.05, ease: "power2.out", clearProps: "x" }, 0);
+        }
+
+        // 5. Fire Cards (Cards have their own internal timeline that starts at 0 + stagger)
+        tl.add(() => playCardAnimations(dir), 0);
+    };
+
+    return { init, teardown, playIntro };
+})();
