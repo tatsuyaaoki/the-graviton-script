@@ -22,7 +22,11 @@ export const PortfolioGallery = (() => {
         if (els && els.cards) { 
             els.cards.forEach(card => { 
                 const allEls = gsap.utils.toArray(card.querySelectorAll('*')); 
-                if(allEls.length) { gsap.killTweensOf(allEls); gsap.set(allEls, { clearProps: 'opacity,x,transform,clipPath,scaleX,scaleY,left,right,top,bottom' }); } 
+                if(allEls.length) { 
+                    gsap.killTweensOf(allEls); 
+                    // Safely clear only animation props, preserve Webflow layout
+                    gsap.set(allEls, { clearProps: 'opacity,x,y,transform,clipPath,scaleX,scaleY,left,right,top,bottom' }); 
+                } 
                 card.style.pointerEvents = ''; 
             }); 
         }
@@ -81,39 +85,31 @@ export const PortfolioGallery = (() => {
             const content = gsap.utils.toArray(card.querySelectorAll('.catalog-card_content'));
             const details = gsap.utils.toArray(card.querySelectorAll('.card_details_container'));
 
-            const startX = dir * 20; 
-            const startTime = i * CONFIG.timing.cardIntroStagger; // Stagger calculation
+            const startX = dir * 30; 
+            const startTime = i * CONFIG.timing.cardIntroStagger; 
 
-            // Pre-set states
+            // Hard reset to guarantee starting position
             if(top.c.length) gsap.set([top.c, bottom.c], { scaleX: 0 });
             if(top.l.length) gsap.set([top.l, bottom.l], { left: '50%', opacity: 0 });
             if(top.r.length) gsap.set([top.r, bottom.r], { right: '50%', opacity: 0 });
-            if(img.length) gsap.set(img, { opacity: 0, x: startX });
-            if(content.length) gsap.set(content, { opacity: 0, x: startX });
-            if(details.length) gsap.set(details, { opacity: 0, x: startX });
 
-            // Horizontal Lines First
-            if(top.l.length) masterTl.to(top.l, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-            if(top.r.length) masterTl.to(top.r, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-            if(top.c.length) masterTl.to(top.c, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
+            // Animate Lines
+            if(top.l.length) masterTl.fromTo(top.l, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
+            if(top.r.length) masterTl.fromTo(top.r, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
+            if(top.c.length) masterTl.fromTo(top.c, { scaleX: 0 }, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
 
             if (card.classList.contains('is-last-in-col') && bottomWrapper) {
-                if(bottom.l.length) masterTl.to(bottom.l, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-                if(bottom.r.length) masterTl.to(bottom.r, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-                if(bottom.c.length) masterTl.to(bottom.c, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
+                if(bottom.l.length) masterTl.fromTo(bottom.l, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
+                if(bottom.r.length) masterTl.fromTo(bottom.r, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
+                if(bottom.c.length) masterTl.fromTo(bottom.c, { scaleX: 0 }, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
             }
 
-            // Image -> Content -> Details (Cascading slightly after lines)
-            masterTl.to(img, { opacity: 1, x: 0, duration: CONFIG.styling.imageFadeDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, startTime + 0.2);
-            masterTl.to(content, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, startTime + 0.3);
-            masterTl.to(details, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x', onComplete: () => { card.style.pointerEvents = 'auto'; } }, startTime + 0.4);
+            // Animate Content (Cascading)
+            if(img.length) masterTl.fromTo(img, { opacity: 0, x: startX }, { opacity: 1, x: 0, duration: CONFIG.styling.imageFadeDuration, ease: CONFIG.styling.easeMain, clearProps: 'x,transform' }, startTime + 0.2);
+            if(content.length) masterTl.fromTo(content, { opacity: 0, x: startX }, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x,transform' }, startTime + 0.3);
+            if(details.length) masterTl.fromTo(details, { opacity: 0, x: startX }, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x,transform', onComplete: () => { card.style.pointerEvents = 'auto'; } }, startTime + 0.4);
         });
     };
-
-    const updateDropdownStates = () => { /* ... */ };
-    const applyFilters = () => { /* ... */ };
-    const setViewMode = (isList) => { /* ... */ };
-    const setupCustomDropdowns = (context) => { /* ... */ };
 
     const splitTextNodes = (element) => {
         if (!element || element.dataset.split === 'true') return;
@@ -124,7 +120,7 @@ export const PortfolioGallery = (() => {
                 const chars = node.textContent.split('');
                 chars.forEach(c => {
                     if (c.trim() === '') newHTML += `<span>&nbsp;</span>`;
-                    else newHTML += `<span style="opacity:0">${c}</span>`;
+                    else newHTML += `<span style="opacity:0; display:inline-block;">${c}</span>`;
                 });
             } else if (node.nodeName.toLowerCase() === 'br') {
                 newHTML += '<br/>';
@@ -153,9 +149,9 @@ export const PortfolioGallery = (() => {
             const p = context.querySelector('.header_paragraph');
             if(p) splitTextNodes(p);
 
-            gsap.set(context.querySelectorAll('.line_v-c'), { scaleY: 0 });
-            gsap.set(context.querySelectorAll('.line_v-cap_t'), { opacity: 0, top: '50%' });
-            gsap.set(context.querySelectorAll('.line_v-cap_b'), { opacity: 0, bottom: '50%' });
+            gsap.set(context.querySelectorAll('.line_v-c, .line_h-c'), { scaleY: 0, scaleX: 0 });
+            gsap.set(context.querySelectorAll('.line_v-cap_t, .line_v-cap_b, .line_h-cap_l, .line_h-cap_r'), { opacity: 0 });
+            gsap.set(context.querySelectorAll('.catalog-card_image, .catalog-card_content, .card_details_container'), { opacity: 0 });
         }
 
         els.mainItems.forEach(item => {
@@ -179,38 +175,35 @@ export const PortfolioGallery = (() => {
 
     const playIntro = (context, dir = 1) => {
         state.isTransitioning = false;
-        
-        // MASTER TIMELINE: Everything operates on this exact same clock
         const masterTl = gsap.timeline();
 
-        // 1. Title Vertical Line (Runs at t=0)
+        // 1. Title Vertical Line 
         const vCenters = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-c'));
         const vCapsT = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-cap_t'));
         const vCapsB = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-cap_b'));
 
-        if (vCapsT.length) masterTl.to(vCapsT, { top: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (vCapsB.length) masterTl.to(vCapsB, { bottom: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (vCenters.length) masterTl.to(vCenters, { scaleY: 1, duration: 0.4, ease: "power2.out" }, 0.1);
+        if (vCapsT.length) masterTl.fromTo(vCapsT, { top: '50%', opacity: 0 }, { top: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (vCapsB.length) masterTl.fromTo(vCapsB, { bottom: '50%', opacity: 0 }, { bottom: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (vCenters.length) masterTl.fromTo(vCenters, { scaleY: 0 }, { scaleY: 1, duration: 0.4, ease: "power2.out" }, 0.1);
 
-        // 2. Typewriter Effect (Runs at t=0)
+        // 2. Typewriter Effect
         const p = context.querySelector('.header_paragraph');
         if (p) {
             const chars = p.querySelectorAll('span');
-            // Remove the global opacity=0 from CSS so the spans can fade in
-            gsap.set(p, { opacity: 1 }); 
-            masterTl.to(chars, { opacity: 1, duration: 0.05, stagger: 0.015, ease: "none" }, 0);
+            gsap.set(p, { opacity: 1 }); // Clear container opacity
+            masterTl.fromTo(chars, { opacity: 0 }, { opacity: 1, duration: 0.05, stagger: 0.02, ease: "none" }, 0);
         }
 
-        // 3. Card Header Horizontal Lines (Runs at t=0)
+        // 3. Header Horizontal Lines
         const headerHCenters = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c'));
         const headerHL = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_l'));
         const headerHR = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r'));
         
-        if (headerHL.length) masterTl.to(headerHL, { left: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (headerHR.length) masterTl.to(headerHR, { right: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (headerHCenters.length) masterTl.to(headerHCenters, { scaleX: 1, duration: 0.4, ease: "power2.out" }, 0.1);
+        if (headerHL.length) masterTl.fromTo(headerHL, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (headerHR.length) masterTl.fromTo(headerHR, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (headerHCenters.length) masterTl.fromTo(headerHCenters, { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, 0.1);
 
-        // 4. Header Items Cascade (Runs at t=0)
+        // 4. Header Items Cascade
         const headerTargets = [
             context.querySelector('#vertical_line_filter_1'),
             context.querySelector('#filter_item_1'),
@@ -224,26 +217,19 @@ export const PortfolioGallery = (() => {
         ].filter(Boolean);
 
         if (headerTargets.length) {
-            // Anchor Logic: 
-            // If dir=1 (from Right), Right-most element is Anchor. We slide others from Left (-x).
-            // If dir=-1 (from Left), Left-most element is Anchor. We slide others from Right (+x).
             const targets = dir === -1 ? [...headerTargets].reverse() : headerTargets;
             
             targets.forEach((target, i) => {
-                // The first element in the 'targets' array is the Anchor. It does not move.
                 const startX = i === 0 ? 0 : (dir === 1 ? -15 : 15);
-                gsap.set(target, { opacity: 0, x: startX });
-                masterTl.to(target, { 
-                    opacity: 1, 
-                    x: 0, 
-                    duration: 0.4, 
-                    ease: "power2.out", 
-                    clearProps: "opacity,x,transform" // Preserves Webflow UI states
-                }, i * 0.05); // Staggers starting exactly at t=0
+                masterTl.fromTo(target, 
+                    { opacity: 0, x: startX }, 
+                    { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", clearProps: "opacity,x,transform" }, 
+                    i * 0.05
+                );
             });
         }
 
-        // 5. Cards Sequence (Runs at t=0)
+        // 5. Cards Sequence
         playCardAnimations(masterTl, dir);
     };
 
