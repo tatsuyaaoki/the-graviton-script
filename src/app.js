@@ -1,9 +1,9 @@
 /**
  * Module: Main Application Entry Point (app.js)
- * Description: Orchestrates Barba.js transitions and manages the Webflow DOM lifecycle.
- * Note: Hex Engine Temporarily Disabled for UI Debugging.
+ * Description: Orchestrates Spatial Barba.js transitions.
  */
 
+import { initHexEngine, handleHexResize } from './hex-engine.js';
 import { PortfolioGallery } from './portfolio.js';
 import { initHUD, updateHUD } from './hud.js';
 
@@ -11,7 +11,44 @@ const IS_DEV = window.location.hostname === 'localhost' || window.location.hostn
 export const devLog = (...args) => { if (IS_DEV) console.log(...args); };
 
 /* ==========================================================================
-   1. BARBA.JS PAGE TRANSITIONS 
+   1. SPATIAL ROUTE MAP
+   Defines the physical Left-to-Right layout of the website.
+   ========================================================================== */
+const routeMap = ['/', '/catalog', '/glitch']; 
+
+function getRouteDirection(fromPath, toPath) {
+    const normalize = (p) => p === '/' ? '/' : p.replace(/\/$/, '').split('?')[0];
+    let fromIdx = routeMap.findIndex(r => normalize(fromPath).startsWith(r) && (r !== '/' || normalize(fromPath) === '/'));
+    let toIdx = routeMap.findIndex(r => normalize(toPath).startsWith(r) && (r !== '/' || normalize(toPath) === '/'));
+
+    if (fromIdx === -1) fromIdx = 0;
+    if (toIdx === -1) toIdx = 1;
+
+    // Returns 1 if moving Right, -1 if moving Left
+    return toIdx >= fromIdx ? 1 : -1;
+}
+
+/* ==========================================================================
+   2. CANVAS BOOTSTRAP & HOVER TRIGGERS (Background Layer)
+   ========================================================================== */
+function bootstrapCanvas() {
+    if (document.getElementById('hexCanvas')) return;
+    const canvas = document.createElement('canvas');
+    canvas.id = 'hexCanvas';
+    canvas.setAttribute('data-html2canvas-ignore', 'true');
+    canvas.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:-2; pointer-events:none; opacity:0;';
+    document.body.appendChild(canvas);
+}
+bootstrapCanvas();
+
+document.addEventListener('mouseover', (e) => {
+    if (window.innerWidth > 991 && e.target instanceof Element && e.target.closest('.catalog-card_component')) {
+        devLog('[GRV:HEX] Card hovered - Hex background engaged');
+    }
+});
+
+/* ==========================================================================
+   3. BARBA.JS PAGE TRANSITIONS 
    ========================================================================== */
 function initBarba() {
     if (typeof barba === 'undefined' || window._pgBarbaHooked) return;
@@ -20,75 +57,56 @@ function initBarba() {
     barba.init({
         debug: IS_DEV,
         transitions: [{
-            name: 'slide-transition',
+            name: 'spatial-slide',
 
             leave(data) {
-                devLog('BARBA: leave()');
                 const done = this.async();
                 const c = data.current.container;
+                const dir = getRouteDirection(data.current.url.path, data.next.url.path);
+                
+                // Save direction for the enter hook
+                data.next.direction = dir; 
 
                 if (c.getAttribute('data-barba-namespace') === 'catalog') {
                     PortfolioGallery.teardown();
                 }
 
-                const cascadeTargets = [
-                    c.querySelector('#vertical_line_view_3'),
-                    c.querySelector('.grid-btn'),
-                    c.querySelector('.list-btn'),
-                    c.querySelector('#vertical_line_view_2'),
-                    c.querySelector('#vertical_line_filter_3'),
-                    c.querySelector('#filter_item_2'),
-                    c.querySelector('#vertical_line_filter_2'),
-                    c.querySelector('#filter_item_1'),
-                    c.querySelector('#vertical_line_filter_1')
-                ].filter(Boolean); 
-
-                const tl = gsap.timeline({
+                // Slide the old page OUT to the opposite direction of travel
+                gsap.to(c, { 
+                    x: `${-100 * dir}vw`, 
+                    opacity: 0, 
+                    duration: 0.6, 
+                    ease: "power3.inOut",
                     onComplete: () => {
                         window.scrollTo(0, 0);
                         gsap.set(c, { display: 'none' });
                         done();
                     }
                 });
-
-                if(cascadeTargets.length) {
-                    tl.to(cascadeTargets, { x: -20, opacity: 0, duration: 0.25, stagger: 0.05, ease: "power2.in" });
-                }
-
-                tl.to(c, { x: '-100vw', opacity: 0, duration: 0.5, ease: "power3.inOut" }, "-=0.1"); 
             },
 
             enter(data) {
-                devLog('BARBA: enter()');
                 const c = data.next.container;
                 const headerEl = document.querySelector('.header');
                 const headerH = headerEl ? headerEl.offsetHeight : 50;
+                
+                // Retrieve direction calculated in leave() hook, default to 1 (Right)
+                const dir = data.next.direction || 1; 
 
-                const headerTargets = [
-                    c.querySelector('#vertical_line_filter_1'),
-                    c.querySelector('#filter_item_1'),
-                    c.querySelector('#vertical_line_filter_2'),
-                    c.querySelector('#filter_item_2'),
-                    c.querySelector('#vertical_line_filter_3'),
-                    c.querySelector('#vertical_line_view_2'),
-                    c.querySelector('.list-btn'),
-                    c.querySelector('.grid-btn'),
-                    c.querySelector('#vertical_line_view_3')
-                ].filter(Boolean);
+                // Start the new page OFFSCREEN in the direction it came from
+                gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: `${100 * dir}vw`, opacity: 1 });
 
-                gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: '100vw', opacity: 0 });
-                if (headerTargets.length) gsap.set(headerTargets, { opacity: 0, x: 20 });
-
-                // Init Portfolio Logic 
+                // Initialize HTML & Webflow
                 if (c.querySelector('.catalog-list_item')) {
+                    // Pass true to skip instant intro, let Barba finish sliding first
                     PortfolioGallery.init(c, true);
                 }
 
-                // Restart Webflow IX2 (Dropdowns are now handled manually in portfolio.js)
                 try {
                     if (window.Webflow) {
                         window.Webflow.destroy(); 
                         window.Webflow.ready();   
+                        if (window.Webflow.require('dropdown')) window.Webflow.require('dropdown').ready();
                         if (window.Webflow.require('ix2')) window.Webflow.require('ix2').init();
                         document.dispatchEvent(new Event('readystatechange'));
                     }
@@ -96,24 +114,20 @@ function initBarba() {
                     devLog('BARBA: enter init error:', e);
                 }
 
-                const tl = gsap.timeline({
-                    delay: 0.1,
+                // Slide the new page into the center
+                gsap.to(c, { 
+                    x: '0vw', 
+                    duration: 0.8, 
+                    ease: "power3.out",
                     onComplete: () => {
-                        devLog('BARBA: transition complete');
                         gsap.set(c, { clearProps: 'position,top,left,width,zIndex,x,opacity' });
                         updateHUD(); 
-                        if (c.querySelector('.catalog-list_item')) PortfolioGallery.playIntro();
+                        // Once the page is locked in, trigger the internal spatial intro
+                        if (c.querySelector('.catalog-list_item')) {
+                            PortfolioGallery.playIntro(dir);
+                        }
                     }
                 });
-
-                tl.to(c, { x: '0vw', opacity: 1, duration: 0.7, ease: "power3.out" });
-
-                if(headerTargets.length) {
-                    tl.to(headerTargets, { 
-                        opacity: 1, x: 0, stagger: 0.05, duration: 0.4, ease: "power2.out", 
-                        clearProps: "opacity,x" 
-                    }, "-=0.3");
-                }
             }
         }]
     });
@@ -128,11 +142,16 @@ function initBarba() {
 }
 
 /* ==========================================================================
-   2. SYSTEM BOOT (DOMContentLoaded)
+   4. SYSTEM BOOT
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
     initHUD();
+    const canvas = document.getElementById('hexCanvas');
+    if (canvas) { initHexEngine(canvas); window.addEventListener('resize', handleHexResize); }
+
     const container = document.querySelector('[data-barba-namespace="catalog"]');
-    if (container) PortfolioGallery.init(container, false);
+    // If user lands directly on Catalog (no Barba), default to dir=1
+    if (container) PortfolioGallery.init(container, false, 1);
+
     initBarba();
 });
