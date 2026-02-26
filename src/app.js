@@ -1,7 +1,13 @@
 /**
  * Module: Main Application Entry Point (app.js)
  * Description: Orchestrates Spatial Barba.js transitions.
- * Update: Concurrent spatial UI triggering.
+ *
+ * FIXES (v10):
+ *   FIX-3 (Barba side): `PortfolioGallery.playIntro()` is now called exclusively
+ *   inside the gsap.to slide `onComplete` callback, ensuring it only fires once
+ *   the incoming container has fully settled at x:0. Calling it in parallel with
+ *   the slide (as before) caused GSAP to fight the slide tween, making line and
+ *   card animations invisible because the container was off-screen.
  */
 
 import { initHexEngine, handleHexResize } from './hex-engine.js';
@@ -14,23 +20,23 @@ export const devLog = (...args) => { if (IS_DEV) console.log(...args); };
 /* ==========================================================================
    1. SPATIAL ROUTE MAP
    ========================================================================== */
-const routeMap = ['/', '/catalog', '/glitch']; 
+const routeMap = ['/', '/catalog', '/glitch'];
 
 function getRouteDirection(fromPath, toPath) {
     const nFrom = fromPath === '/' ? '/' : fromPath.replace(/\/$/, '').split('?')[0];
-    const nTo = toPath === '/' ? '/' : toPath.replace(/\/$/, '').split('?')[0];
+    const nTo   = toPath   === '/' ? '/' : toPath.replace(/\/$/, '').split('?')[0];
     let fromIdx = routeMap.indexOf(nFrom);
-    let toIdx = routeMap.indexOf(nTo);
+    let toIdx   = routeMap.indexOf(nTo);
 
     if (fromIdx === -1) fromIdx = 0;
-    if (toIdx === -1) toIdx = 1;
+    if (toIdx   === -1) toIdx   = 1;
 
     // 1 = Slide Left (Entering from Right) | -1 = Slide Right (Entering from Left)
     return toIdx >= fromIdx ? 1 : -1;
 }
 
 /* ==========================================================================
-   2. CANVAS BOOTSTRAP 
+   2. CANVAS BOOTSTRAP
    ========================================================================== */
 function bootstrapCanvas() {
     if (document.getElementById('hexCanvas')) return;
@@ -49,7 +55,7 @@ document.addEventListener('mouseover', (e) => {
 });
 
 /* ==========================================================================
-   3. BARBA.JS PAGE TRANSITIONS 
+   3. BARBA.JS PAGE TRANSITIONS
    ========================================================================== */
 function initBarba() {
     if (typeof barba === 'undefined' || window._pgBarbaHooked) return;
@@ -62,18 +68,18 @@ function initBarba() {
 
             leave(data) {
                 const done = this.async();
-                const c = data.current.container;
-                const dir = getRouteDirection(data.current.url.path, data.next.url.path);
-                
+                const c    = data.current.container;
+                const dir  = getRouteDirection(data.current.url.path, data.next.url.path);
+
                 if (c.getAttribute('data-barba-namespace') === 'catalog') {
                     PortfolioGallery.teardown();
                 }
 
-                gsap.to(c, { 
-                    x: `${-100 * dir}vw`, 
-                    opacity: 0, 
-                    duration: 0.6, 
-                    ease: "power3.inOut",
+                gsap.to(c, {
+                    x: `${-100 * dir}vw`,
+                    opacity: 0,
+                    duration: 0.6,
+                    ease: 'power3.inOut',
                     onComplete: () => {
                         window.scrollTo(0, 0);
                         gsap.set(c, { display: 'none' });
@@ -83,42 +89,57 @@ function initBarba() {
             },
 
             enter(data) {
-                const c = data.next.container;
+                const c        = data.next.container;
                 const headerEl = document.querySelector('.header');
-                const headerH = headerEl ? headerEl.offsetHeight : 50;
-                
-                const dir = getRouteDirection(data.current.url.path, data.next.url.path); 
+                const headerH  = headerEl ? headerEl.offsetHeight : 50;
+                const dir      = getRouteDirection(data.current.url.path, data.next.url.path);
+
                 devLog(`[GRV:ROUTER] Transitioning. Direction = ${dir}`);
 
-                gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: `${100 * dir}vw`, opacity: 1 });
+                gsap.set(c, {
+                    position: 'fixed',
+                    top:      headerH,
+                    left:     0,
+                    width:    '100vw',
+                    zIndex:   2,
+                    x:        `${100 * dir}vw`,
+                    opacity:  1
+                });
 
                 const isCatalog = c.querySelector('.catalog-list_item') !== null;
+
+                // FIX-3: init() sets initial hidden states (skipIntro=true) but does
+                // NOT call playIntro. We defer playIntro to the slide's onComplete
+                // so GSAP animations run on a container that is already at x:0.
                 if (isCatalog) PortfolioGallery.init(c, true, dir);
 
                 try {
                     if (window.Webflow) {
-                        window.Webflow.destroy(); 
-                        window.Webflow.ready();   
+                        window.Webflow.destroy();
+                        window.Webflow.ready();
                         if (window.Webflow.require('dropdown')) window.Webflow.require('dropdown').ready();
-                        if (window.Webflow.require('ix2')) window.Webflow.require('ix2').init();
+                        if (window.Webflow.require('ix2'))      window.Webflow.require('ix2').init();
                         document.dispatchEvent(new Event('readystatechange'));
                     }
-                } catch (e) {}
+                } catch (e) { /* Webflow re-init is best-effort */ }
 
-                // SIMULTANEOUS LAUNCH: The page slide and the component build run at the exact same time
-                gsap.to(c, { 
-                    x: '0vw', 
-                    duration: 0.8, 
-                    ease: "power3.out",
+                // Slide the incoming container to x:0, THEN fire playIntro
+                gsap.to(c, {
+                    x:        '0vw',
+                    duration: 0.8,
+                    ease:     'power3.out',
                     onComplete: () => {
+                        // Container is fully landed — safe to run all intro animations
                         gsap.set(c, { clearProps: 'position,top,left,width,zIndex,x,opacity' });
-                        updateHUD(); 
+                        updateHUD();
+
+                        // FIX-3: playIntro fires HERE, not in parallel with the slide
+                        if (isCatalog) {
+                            devLog('[GRV:ROUTER] Slide settled — firing playIntro');
+                            PortfolioGallery.playIntro(c, dir);
+                        }
                     }
                 });
-
-                if (isCatalog) {
-                    PortfolioGallery.playIntro(c, dir); 
-                }
             }
         }]
     });
@@ -132,14 +153,23 @@ function initBarba() {
     });
 }
 
+/* ==========================================================================
+   4. FIRST LOAD BOOTSTRAP
+   ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
     initHUD();
-    const canvas = document.getElementById('hexCanvas');
-    if (canvas) { initHexEngine(canvas); window.addEventListener('resize', handleHexResize); }
 
+    const canvas = document.getElementById('hexCanvas');
+    if (canvas) {
+        initHexEngine(canvas);
+        window.addEventListener('resize', handleHexResize);
+    }
+
+    // First-load catalog: skipIntro=false so init() calls playIntro via rAF
     const container = document.querySelector('[data-barba-namespace="catalog"]');
     if (container) {
         PortfolioGallery.init(container, false, 1);
     }
+
     initBarba();
 });
