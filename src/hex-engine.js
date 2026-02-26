@@ -2,6 +2,7 @@
  * Module: Hex Disintegration Engine
  * Description: Manages the WebGL canvas, Three.js InstancedMesh generation,
  * custom shaders, and the html2canvas viewport capturing mechanic.
+ * Updated: Implemented Predictive Texture Caching & Downscaling for CPU optimization.
  */
 
 // Debug Logger
@@ -17,6 +18,16 @@ export const HEX_CONFIG = {
 let hexScene, hexCamera, hexRenderer, hexMesh, hexMaterial;
 let currentHexQuantity = getResponsiveHexQuantity();
 let _hexRenderActive = false;
+
+// --- NEW: Global Texture Cache ---
+export let cachedTexture = null;
+
+export async function prefetchViewportTexture() {
+    if (cachedTexture) return; // Prevent double-fetching if user hovers multiple times
+    devLog('[GRV:HEX] Prefetching viewport texture on hover...');
+    cachedTexture = await getViewportTexture();
+}
+// ---------------------------------
 
 function getResponsiveHexQuantity() {
     const w = window.innerWidth;
@@ -228,9 +239,10 @@ async function getViewportTexture() {
     const sx = Math.round(window.scrollX);
     const sy = Math.round(window.scrollY);
 
+    // PERFORMANCE TWEAK: Downscale texture resolution to 0.5 to prevent Intel Mac lagging
     const captured = await html2canvas(document.body, {
         backgroundColor: null,
-        scale: 1,
+        scale: 0.5, 
         useCORS: true,
         windowWidth: cw,
         windowHeight: ch,
@@ -252,7 +264,9 @@ async function getViewportTexture() {
 }
 
 export async function playHexTransition(canvas, nextBgColor, swapDOMCallback) {
-    hexMaterial.uniforms.map.value = await getViewportTexture();
+    // Use the cached texture if available (from hover trigger), otherwise generate on the spot
+    hexMaterial.uniforms.map.value = cachedTexture || await getViewportTexture();
+    
     hexMaterial.uniforms.uNextColor.value.set(nextBgColor);
     hexMaterial.uniforms.uTime.value = 0;
     hexMaterial.uniforms.uGlobalAlpha.value = 1.0;
@@ -273,4 +287,10 @@ export async function playHexTransition(canvas, nextBgColor, swapDOMCallback) {
     await gsap.to(hexMaterial.uniforms.uGlobalAlpha, { value: 0, duration: 0.2 });
     gsap.set(canvas, { opacity: 0 });
     stopHexRender();
+
+    // Flush memory cache after the transition completes
+    if (cachedTexture) {
+        cachedTexture.dispose();
+        cachedTexture = null;
+    }
 }

@@ -2,9 +2,10 @@
  * Module: Main Application Entry Point (app.js)
  * Description: Orchestrates Barba.js transitions, initializes the Three.js 
  * Hex Engine, and manages the Webflow DOM lifecycle.
+ * Updated: Wired predictive WebGL texture caching on link hover.
  */
 
-import { initHexEngine, playHexTransition, handleHexResize } from './hex-engine.js';
+import { initHexEngine, playHexTransition, handleHexResize, prefetchViewportTexture, cachedTexture } from './hex-engine.js';
 import { PortfolioGallery } from './portfolio.js';
 import { initHUD, updateHUD } from './hud.js';
 
@@ -28,7 +29,18 @@ function bootstrapCanvas() {
 bootstrapCanvas();
 
 /* ==========================================================================
-   2. BARBA.JS PAGE TRANSITIONS
+   2. PREDICTIVE CAPTURE (The Magic Trick)
+   ========================================================================== */
+// Listen for hovers on any link to pre-compute the html2canvas texture
+document.addEventListener('mouseover', (e) => {
+    // If hovering over a link, and we don't already have a texture cached in memory
+    if (e.target.closest('a') && !cachedTexture) {
+        prefetchViewportTexture();
+    }
+});
+
+/* ==========================================================================
+   3. BARBA.JS PAGE TRANSITIONS
    ========================================================================== */
 function initBarba() {
     if (typeof barba === 'undefined' || window._pgBarbaHooked) return;
@@ -43,6 +55,12 @@ function initBarba() {
             leave(data) {
                 devLog('BARBA: leave()');
                 const done = this.async();
+
+                // PERCEIVED PERFORMANCE TWEAK: Instant feedback on click
+                // Shrink the clicked element instantly so the user knows the app is responding
+                if (data.trigger instanceof Element) {
+                    gsap.to(data.trigger, { scale: 0.95, opacity: 0.8, duration: 0.2, transformOrigin: "center center" });
+                }
 
                 if (data.current.container.getAttribute('data-barba-namespace') === 'catalog') {
                     PortfolioGallery.teardown();
@@ -121,7 +139,7 @@ function initBarba() {
 }
 
 /* ==========================================================================
-   3. SYSTEM BOOT (DOMContentLoaded)
+   4. SYSTEM BOOT (DOMContentLoaded)
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Init UI Overlays
