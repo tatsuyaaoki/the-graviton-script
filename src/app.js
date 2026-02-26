@@ -12,14 +12,13 @@ const IS_DEV = window.location.hostname === 'localhost' || window.location.hostn
 export const devLog = (...args) => { if (IS_DEV) console.log(...args); };
 
 /* ==========================================================================
-   1. CANVAS BOOTSTRAP (Now a Pure Background Layer)
+   1. CANVAS BOOTSTRAP (Background Layer)
    ========================================================================== */
 function bootstrapCanvas() {
     if (document.getElementById('hexCanvas')) return;
     const canvas = document.createElement('canvas');
     canvas.id = 'hexCanvas';
     canvas.setAttribute('data-html2canvas-ignore', 'true');
-    // Canvas is now pushed further back (-2) so it sits safely behind the UI 
     canvas.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:-2; pointer-events:none; opacity:0;';
     document.body.appendChild(canvas);
     devLog('[GRV:BOOT] hexCanvas background created');
@@ -27,19 +26,16 @@ function bootstrapCanvas() {
 bootstrapCanvas();
 
 /* ==========================================================================
-   2. DESKTOP BACKGROUND HOVER TRIGGERS (Replaces Barba trigger)
+   2. DESKTOP BACKGROUND HOVER TRIGGERS
    ========================================================================== */
 document.addEventListener('mouseenter', (e) => {
-    // Only trigger the background hex effect on Desktop when hovering over a card
     if (window.innerWidth > 991 && e.target.closest('.catalog-card_component')) {
-        // Here you will call your updated background shader trigger in the future
-        // e.g., triggerHexBackgroundRipples();
         devLog('[GRV:HEX] Card hovered - Hex background engaged');
     }
-}, true); // Use capture phase to ensure it catches dynamic elements
+}, true);
 
 /* ==========================================================================
-   3. BARBA.JS PAGE TRANSITIONS (Right-to-Left Cascade & Slide)
+   3. BARBA.JS PAGE TRANSITIONS 
    ========================================================================== */
 function initBarba() {
     if (typeof barba === 'undefined' || window._pgBarbaHooked) return;
@@ -60,7 +56,6 @@ function initBarba() {
                     PortfolioGallery.teardown();
                 }
 
-                // Compile the elements in strict RIGHT-TO-LEFT order
                 const cascadeTargets = [
                     c.querySelector('#vertical_line_view_3'),
                     c.querySelector('.grid-btn'),
@@ -71,7 +66,7 @@ function initBarba() {
                     c.querySelector('#vertical_line_filter_2'),
                     c.querySelector('#filter_item_1'),
                     c.querySelector('#vertical_line_filter_1')
-                ].filter(Boolean); // Clean out nulls if elements are missing
+                ].filter(Boolean); 
 
                 const tl = gsap.timeline({
                     onComplete: () => {
@@ -81,24 +76,11 @@ function initBarba() {
                     }
                 });
 
-                // 1. Stagger exit animation (Right-to-Left)
                 if(cascadeTargets.length) {
-                    tl.to(cascadeTargets, {
-                        x: -20,
-                        opacity: 0,
-                        duration: 0.25,
-                        stagger: 0.05,
-                        ease: "power2.in"
-                    });
+                    tl.to(cascadeTargets, { x: -20, opacity: 0, duration: 0.25, stagger: 0.05, ease: "power2.in" });
                 }
 
-                // 2. Slide the entire container out to the Left
-                tl.to(c, {
-                    x: '-100vw',
-                    opacity: 0,
-                    duration: 0.5,
-                    ease: "power3.inOut"
-                }, "-=0.1"); // Start sliding slightly before the cascade finishes
+                tl.to(c, { x: '-100vw', opacity: 0, duration: 0.5, ease: "power3.inOut" }, "-=0.1"); 
             },
 
             // --- ENTER: Next Page ---
@@ -108,17 +90,30 @@ function initBarba() {
                 const headerEl = document.querySelector('.header');
                 const headerH = headerEl ? headerEl.offsetHeight : 50;
 
-                // Reset new container position: Start completely off-screen to the Right
-                gsap.set(c, {
-                    position: 'fixed', top: headerH, left: 0, width: '100vw',
-                    zIndex: 2, x: '100vw', opacity: 0 
-                });
+                // 1. Gather the fresh header elements for entry animation
+                const headerTargets = [
+                    c.querySelector('#vertical_line_filter_1'),
+                    c.querySelector('#filter_item_1'),
+                    c.querySelector('#vertical_line_filter_2'),
+                    c.querySelector('#filter_item_2'),
+                    c.querySelector('#vertical_line_filter_3'),
+                    c.querySelector('#vertical_line_view_2'),
+                    c.querySelector('.list-btn'),
+                    c.querySelector('.grid-btn'),
+                    c.querySelector('#vertical_line_view_3')
+                ].filter(Boolean);
 
-                // Bridge Pattern: Re-initialize Webflow's native JS
+                // 2. Reset positions: Slide container right, hide header items
+                gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: '100vw', opacity: 0 });
+                if (headerTargets.length) gsap.set(headerTargets, { opacity: 0, x: 20 });
+
+                // 3. HARD RESTART WEBFLOW: Vital for Dropdowns to function post-transition
                 try {
                     if (window.Webflow) {
-                        window.Webflow.require('dropdown')?.ready();
-                        if (c.querySelector('[data-wf-ix]')) window.Webflow.require('ix2')?.init();
+                        window.Webflow.destroy(); // Kill old listeners
+                        window.Webflow.ready();   // Bind to new HTML
+                        window.Webflow.require('ix2')?.init();
+                        document.dispatchEvent(new Event('readystatechange'));
                         window.dispatchEvent(new Event('resize'));
                         if (window.ScrollTrigger) ScrollTrigger.refresh();
                     }
@@ -127,7 +122,7 @@ function initBarba() {
                     devLog('BARBA: enter init error:', e);
                 }
 
-                // Slide the new page in from the Right to Center
+                // 4. Master Entry Timeline
                 const tl = gsap.timeline({
                     delay: 0.1,
                     onComplete: () => {
@@ -138,7 +133,20 @@ function initBarba() {
                     }
                 });
 
+                // Slide page in
                 tl.to(c, { x: '0vw', opacity: 1, duration: 0.7, ease: "power3.out" });
+
+                // Cascade header items in from Left-to-Right
+                if(headerTargets.length) {
+                    tl.to(headerTargets, { 
+                        opacity: 1, 
+                        x: 0, 
+                        stagger: 0.05, 
+                        duration: 0.4, 
+                        ease: "power2.out", 
+                        clearProps: "opacity,x" // Clean up inline styles so they don't break flexbox
+                    }, "-=0.3");
+                }
             }
         }]
     });
