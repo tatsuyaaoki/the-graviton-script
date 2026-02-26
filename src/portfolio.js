@@ -1,6 +1,7 @@
 /**
  * Module: Portfolio Gallery
  * Description: Manages Concurrent Spatial Sequences, Filtering, and Dropdowns.
+ * Update: Bulletproof Selectors, Physics Injection, and Recursive Text Splitter.
  */
 
 export const PortfolioGallery = (() => {
@@ -76,10 +77,20 @@ export const PortfolioGallery = (() => {
 
             const topWrapper = card.querySelector('.horizontal_line_top');
             const bottomWrapper = card.querySelector('.horizontal_line_bottom');
-            const getLineParts = (wrapper) => wrapper ? { c: gsap.utils.toArray(wrapper.querySelectorAll('.line_h-c')), l: gsap.utils.toArray(wrapper.querySelectorAll('.line_h-cap_l')), r: gsap.utils.toArray(wrapper.querySelectorAll('.line_h-cap_r')) } : { c: [], l: [], r: [] };
             
-            const top = getLineParts(topWrapper);
-            const bottom = getLineParts(bottomWrapper);
+            // Flatten Arrays to prevent GSAP Array-Nesting Errors
+            const topC = topWrapper ? gsap.utils.toArray(topWrapper.querySelectorAll('.line_h-c')) : [];
+            const topL = topWrapper ? gsap.utils.toArray(topWrapper.querySelectorAll('.line_h-cap_l')) : [];
+            const topR = topWrapper ? gsap.utils.toArray(topWrapper.querySelectorAll('.line_h-cap_r')) : [];
+            
+            const botC = (card.classList.contains('is-last-in-col') && bottomWrapper) ? gsap.utils.toArray(bottomWrapper.querySelectorAll('.line_h-c')) : [];
+            const botL = (card.classList.contains('is-last-in-col') && bottomWrapper) ? gsap.utils.toArray(bottomWrapper.querySelectorAll('.line_h-cap_l')) : [];
+            const botR = (card.classList.contains('is-last-in-col') && bottomWrapper) ? gsap.utils.toArray(bottomWrapper.querySelectorAll('.line_h-cap_r')) : [];
+
+            const allC = [...topC, ...botC];
+            const allL = [...topL, ...botL];
+            const allR = [...topR, ...botR];
+
             const img = gsap.utils.toArray(card.querySelectorAll('.catalog-card_image'));
             const content = gsap.utils.toArray(card.querySelectorAll('.catalog-card_content'));
             const details = gsap.utils.toArray(card.querySelectorAll('.card_details_container'));
@@ -87,19 +98,10 @@ export const PortfolioGallery = (() => {
             const startX = dir * 30; 
             const startTime = i * CONFIG.timing.cardIntroStagger; 
 
-            if(top.c.length) gsap.set([top.c, bottom.c], { scaleX: 0, transformOrigin: 'center center' });
-            if(top.l.length) gsap.set([top.l, bottom.l], { left: '50%', opacity: 0, xPercent: -50 });
-            if(top.r.length) gsap.set([top.r, bottom.r], { right: '50%', opacity: 0, xPercent: 50 });
-
-            if(top.l.length) masterTl.fromTo(top.l, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-            if(top.r.length) masterTl.fromTo(top.r, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-            if(top.c.length) masterTl.fromTo(top.c, { scaleX: 0 }, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
-
-            if (card.classList.contains('is-last-in-col') && bottomWrapper) {
-                if(bottom.l.length) masterTl.fromTo(bottom.l, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-                if(bottom.r.length) masterTl.fromTo(bottom.r, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
-                if(bottom.c.length) masterTl.fromTo(bottom.c, { scaleX: 0 }, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
-            }
+            // Physics Injected Directly into fromTo
+            if(allL.length) masterTl.fromTo(allL, { left: '50%', opacity: 0, xPercent: -50 }, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
+            if(allR.length) masterTl.fromTo(allR, { right: '50%', opacity: 0, xPercent: 50 }, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
+            if(allC.length) masterTl.fromTo(allC, { scaleX: 0, transformOrigin: 'center center' }, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime + 0.1);
 
             if(img.length) masterTl.fromTo(img, { opacity: 0, x: startX }, { opacity: 1, x: 0, duration: CONFIG.styling.imageFadeDuration, ease: CONFIG.styling.easeMain, clearProps: 'x,transform' }, startTime + 0.2);
             if(content.length) masterTl.fromTo(content, { opacity: 0, x: startX }, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x,transform' }, startTime + 0.3);
@@ -108,7 +110,7 @@ export const PortfolioGallery = (() => {
     };
 
     /* ==========================================================================
-       RESTORED UI CONTROLLERS (Dropdowns & Filters)
+       UI CONTROLLERS (Dropdowns & Filters)
        ========================================================================== */
     const updateDropdownStates = () => {
         ['year', 'cat'].forEach(type => {
@@ -227,22 +229,32 @@ export const PortfolioGallery = (() => {
         addListener(document, 'click', handleOutsideClick);
     };
 
+    // --- RECURSIVE HTML TEXT SPLITTER ---
     const splitTextNodes = (element) => {
         if (!element || element.dataset.split === 'true') return;
         element.dataset.split = 'true';
-        let newHTML = '';
-        element.childNodes.forEach(node => {
-            if (node.nodeType === 3) {
-                const chars = node.textContent.split('');
+        
+        const processNode = (node) => {
+            if (node.nodeType === 3) { 
+                const chars = node.nodeValue.split('');
+                const fragment = document.createDocumentFragment();
                 chars.forEach(c => {
-                    if (c.trim() === '') newHTML += `<span>&nbsp;</span>`;
-                    else newHTML += `<span style="opacity:0; display:inline-block;">${c}</span>`;
+                    if (c === ' ' || c === '\n') {
+                        fragment.appendChild(document.createTextNode(c));
+                    } else {
+                        const span = document.createElement('span');
+                        span.style.opacity = '0';
+                        span.style.display = 'inline-block';
+                        span.textContent = c;
+                        fragment.appendChild(span);
+                    }
                 });
-            } else if (node.nodeName.toLowerCase() === 'br') {
-                newHTML += '<br/>';
+                node.parentNode.replaceChild(fragment, node);
+            } else if (node.nodeType === 1 && node.nodeName.toLowerCase() !== 'br') {
+                Array.from(node.childNodes).forEach(processNode);
             }
-        });
-        element.innerHTML = newHTML;
+        };
+        Array.from(element.childNodes).forEach(processNode);
     };
 
     const init = (context, skipIntro = false, overrideDir = 1) => {
@@ -265,15 +277,17 @@ export const PortfolioGallery = (() => {
         if(p) splitTextNodes(p);
 
         if (skipIntro) {
-            gsap.set(context.querySelectorAll('header .line_v-c'), { scaleY: 0, transformOrigin: 'center center' });
-            gsap.set(context.querySelectorAll('header .line_v-cap_t'), { opacity: 0, top: '50%', yPercent: -50 });
-            gsap.set(context.querySelectorAll('header .line_v-cap_b'), { opacity: 0, bottom: '50%', yPercent: 50 });
-
-            gsap.set(context.querySelectorAll('header .line_h-c, .catalog-card_component .line_h-c'), { scaleX: 0, transformOrigin: 'center center' });
-            gsap.set(context.querySelectorAll('header .line_h-cap_l, .catalog-card_component .line_h-cap_l'), { opacity: 0, left: '50%', xPercent: -50 });
-            gsap.set(context.querySelectorAll('header .line_h-cap_r, .catalog-card_component .line_h-cap_r'), { opacity: 0, right: '50%', xPercent: 50 });
-
-            gsap.set(context.querySelectorAll('.catalog-card_image, .catalog-card_content, .card_details_container'), { opacity: 0 });
+            // Hide specific elements instantly before Barba slides
+            const hideTargets = [
+                ...context.querySelectorAll('header .line_v-c'),
+                ...context.querySelectorAll('header .line_v-cap_t'),
+                ...context.querySelectorAll('header .line_v-cap_b'),
+                ...context.querySelectorAll('header .line_h-c, .catalog-card_component .line_h-c'),
+                ...context.querySelectorAll('header .line_h-cap_l, .catalog-card_component .line_h-cap_l'),
+                ...context.querySelectorAll('header .line_h-cap_r, .catalog-card_component .line_h-cap_r'),
+                ...context.querySelectorAll('.catalog-card_image, .catalog-card_content, .card_details_container')
+            ];
+            gsap.set(hideTargets, { opacity: 0 });
 
             const headerTargets = [
                 context.querySelector('#vertical_line_filter_1'), context.querySelector('#filter_item_1'),
@@ -355,14 +369,16 @@ export const PortfolioGallery = (() => {
         state.isTransitioning = false;
         const masterTl = gsap.timeline();
 
-        const vCenters = gsap.utils.toArray(context.querySelectorAll('header .line_v-c'));
-        const vCapsT = gsap.utils.toArray(context.querySelectorAll('header .line_v-cap_t'));
-        const vCapsB = gsap.utils.toArray(context.querySelectorAll('header .line_v-cap_b'));
+        // 1. Title Vertical Line (Math Filter to avoid Dropdowns)
+        const vCenters = gsap.utils.toArray(context.querySelectorAll('.line_v-c')).filter(el => !el.closest('.w-dropdown-list'));
+        const vCapsT = gsap.utils.toArray(context.querySelectorAll('.line_v-cap_t')).filter(el => !el.closest('.w-dropdown-list'));
+        const vCapsB = gsap.utils.toArray(context.querySelectorAll('.line_v-cap_b')).filter(el => !el.closest('.w-dropdown-list'));
 
-        if (vCapsT.length) masterTl.fromTo(vCapsT, { top: '50%', opacity: 0 }, { top: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (vCapsB.length) masterTl.fromTo(vCapsB, { bottom: '50%', opacity: 0 }, { bottom: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (vCenters.length) masterTl.fromTo(vCenters, { scaleY: 0 }, { scaleY: 1, duration: 0.4, ease: "power2.out" }, 0.1);
+        if (vCapsT.length) masterTl.fromTo(vCapsT, { top: '50%', opacity: 0, yPercent: -50 }, { top: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (vCapsB.length) masterTl.fromTo(vCapsB, { bottom: '50%', opacity: 0, yPercent: 50 }, { bottom: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (vCenters.length) masterTl.fromTo(vCenters, { scaleY: 0, transformOrigin: 'center center' }, { scaleY: 1, duration: 0.4, ease: "power2.out" }, 0.1);
 
+        // 2. Typewriter Effect
         const p = context.querySelector('.header_paragraph');
         if (p) {
             const chars = gsap.utils.toArray(p.querySelectorAll('span'));
@@ -371,14 +387,16 @@ export const PortfolioGallery = (() => {
             }
         }
 
-        const headerHCenters = gsap.utils.toArray(context.querySelectorAll('header .line_h-c'));
-        const headerHL = gsap.utils.toArray(context.querySelectorAll('header .line_h-cap_l'));
-        const headerHR = gsap.utils.toArray(context.querySelectorAll('header .line_h-cap_r'));
+        // 3. Header Horizontal Lines (Math Filter to avoid Cards and Dropdowns)
+        const headerHCenters = gsap.utils.toArray(context.querySelectorAll('.line_h-c')).filter(el => !el.closest('.catalog-card_component') && !el.closest('.w-dropdown-list'));
+        const headerHL = gsap.utils.toArray(context.querySelectorAll('.line_h-cap_l')).filter(el => !el.closest('.catalog-card_component') && !el.closest('.w-dropdown-list'));
+        const headerHR = gsap.utils.toArray(context.querySelectorAll('.line_h-cap_r')).filter(el => !el.closest('.catalog-card_component') && !el.closest('.w-dropdown-list'));
         
-        if (headerHL.length) masterTl.fromTo(headerHL, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (headerHR.length) masterTl.fromTo(headerHR, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
-        if (headerHCenters.length) masterTl.fromTo(headerHCenters, { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, 0.1);
+        if (headerHL.length) masterTl.fromTo(headerHL, { left: '50%', opacity: 0, xPercent: -50 }, { left: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (headerHR.length) masterTl.fromTo(headerHR, { right: '50%', opacity: 0, xPercent: 50 }, { right: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
+        if (headerHCenters.length) masterTl.fromTo(headerHCenters, { scaleX: 0, transformOrigin: 'center center' }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, 0.1);
 
+        // 4. Header Items Cascade
         const headerTargets = [
             context.querySelector('#vertical_line_filter_1'),
             context.querySelector('#filter_item_1'),
@@ -393,7 +411,6 @@ export const PortfolioGallery = (() => {
 
         if (headerTargets.length) {
             const targets = dir === -1 ? [...headerTargets].reverse() : headerTargets;
-            
             targets.forEach((target, i) => {
                 const startX = i === 0 ? 0 : (dir === 1 ? -15 : 15);
                 masterTl.fromTo(target, 
@@ -404,6 +421,7 @@ export const PortfolioGallery = (() => {
             });
         }
 
+        // 5. Cards Sequence
         playCardAnimations(masterTl, dir);
     };
 
