@@ -24,8 +24,8 @@ export const PortfolioGallery = (() => {
                 const allEls = gsap.utils.toArray(card.querySelectorAll('*')); 
                 if(allEls.length) { 
                     gsap.killTweensOf(allEls); 
-                    // Safely clear only animation props, preserve Webflow layout
-                    gsap.set(allEls, { clearProps: 'opacity,x,y,transform,clipPath,scaleX,scaleY,left,right,top,bottom' }); 
+                    // Safely clear ONLY transforms so Webflow Flexbox doesn't break
+                    gsap.set(allEls, { clearProps: 'x,y,transform' }); 
                 } 
                 card.style.pointerEvents = ''; 
             }); 
@@ -146,12 +146,32 @@ export const PortfolioGallery = (() => {
         };
 
         if (skipIntro) {
+            // HARD PRE-SETS: Replaces the buggy CSS hide block
             const p = context.querySelector('.header_paragraph');
             if(p) splitTextNodes(p);
 
-            gsap.set(context.querySelectorAll('.line_v-c, .line_h-c'), { scaleY: 0, scaleX: 0 });
-            gsap.set(context.querySelectorAll('.line_v-cap_t, .line_v-cap_b, .line_h-cap_l, .line_h-cap_r'), { opacity: 0 });
+            gsap.set(context.querySelectorAll('header .line_v-c'), { scaleY: 0 });
+            gsap.set(context.querySelectorAll('header .line_v-cap_t'), { opacity: 0, top: '50%' });
+            gsap.set(context.querySelectorAll('header .line_v-cap_b'), { opacity: 0, bottom: '50%' });
+
+            // Broadened Selector: Targets ALL horizontal lines inside the header
+            gsap.set(context.querySelectorAll('header .line_h-c, .catalog-card_component .line_h-c'), { scaleX: 0 });
+            gsap.set(context.querySelectorAll('header .line_h-cap_l, .catalog-card_component .line_h-cap_l'), { opacity: 0, left: '50%' });
+            gsap.set(context.querySelectorAll('header .line_h-cap_r, .catalog-card_component .line_h-cap_r'), { opacity: 0, right: '50%' });
+
             gsap.set(context.querySelectorAll('.catalog-card_image, .catalog-card_content, .card_details_container'), { opacity: 0 });
+
+            // Hide header cascade targets
+            const headerTargets = [
+                context.querySelector('#vertical_line_filter_1'), context.querySelector('#filter_item_1'),
+                context.querySelector('#vertical_line_filter_2'), context.querySelector('#filter_item_2'),
+                context.querySelector('#vertical_line_filter_3'), context.querySelector('#vertical_line_view_2'),
+                context.querySelector('.list-btn'), context.querySelector('.grid-btn'), context.querySelector('#vertical_line_view_3')
+            ].filter(Boolean);
+            if (headerTargets.length) {
+                const startX = overrideDir * 30;
+                gsap.set(headerTargets, { opacity: 0, x: startX });
+            }
         }
 
         els.mainItems.forEach(item => {
@@ -178,9 +198,9 @@ export const PortfolioGallery = (() => {
         const masterTl = gsap.timeline();
 
         // 1. Title Vertical Line 
-        const vCenters = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-c'));
-        const vCapsT = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-cap_t'));
-        const vCapsB = gsap.utils.toArray(context.querySelectorAll('.catalog-header_heading .line_v-cap_b'));
+        const vCenters = gsap.utils.toArray(context.querySelectorAll('header .line_v-c'));
+        const vCapsT = gsap.utils.toArray(context.querySelectorAll('header .line_v-cap_t'));
+        const vCapsB = gsap.utils.toArray(context.querySelectorAll('header .line_v-cap_b'));
 
         if (vCapsT.length) masterTl.fromTo(vCapsT, { top: '50%', opacity: 0 }, { top: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
         if (vCapsB.length) masterTl.fromTo(vCapsB, { bottom: '50%', opacity: 0 }, { bottom: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
@@ -190,14 +210,13 @@ export const PortfolioGallery = (() => {
         const p = context.querySelector('.header_paragraph');
         if (p) {
             const chars = p.querySelectorAll('span');
-            gsap.set(p, { opacity: 1 }); // Clear container opacity
             masterTl.fromTo(chars, { opacity: 0 }, { opacity: 1, duration: 0.05, stagger: 0.02, ease: "none" }, 0);
         }
 
-        // 3. Header Horizontal Lines
-        const headerHCenters = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c'));
-        const headerHL = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_l'));
-        const headerHR = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r'));
+        // 3. Header Horizontal Lines (Broadened query)
+        const headerHCenters = gsap.utils.toArray(context.querySelectorAll('header .line_h-c'));
+        const headerHL = gsap.utils.toArray(context.querySelectorAll('header .line_h-cap_l'));
+        const headerHR = gsap.utils.toArray(context.querySelectorAll('header .line_h-cap_r'));
         
         if (headerHL.length) masterTl.fromTo(headerHL, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
         if (headerHR.length) masterTl.fromTo(headerHR, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: 0.4, ease: "power2.out" }, 0);
@@ -223,7 +242,7 @@ export const PortfolioGallery = (() => {
                 const startX = i === 0 ? 0 : (dir === 1 ? -15 : 15);
                 masterTl.fromTo(target, 
                     { opacity: 0, x: startX }, 
-                    { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", clearProps: "opacity,x,transform" }, 
+                    { opacity: 1, x: 0, duration: 0.4, ease: "power2.out", clearProps: "x,transform" }, 
                     i * 0.05
                 );
             });
@@ -232,6 +251,11 @@ export const PortfolioGallery = (() => {
         // 5. Cards Sequence
         playCardAnimations(masterTl, dir);
     };
+
+    // Need empty dummy funcs to prevent undefined errors if external scripts call them
+    const setupCustomDropdowns = () => {};
+    const applyFilters = () => {};
+    const updateDropdownStates = () => {};
 
     return { init, teardown, playIntro };
 })();
