@@ -45,12 +45,10 @@ export const PortfolioGallery = (() => {
         if (els && els.cards) {
             els.cards.forEach(card => {
                 const allEls = card.querySelectorAll('*');
-                // Kill tweens and wipe inline GSAP styles to prevent html2canvas scaling bugs
                 gsap.killTweensOf(allEls);
                 gsap.set(allEls, { clearProps: 'all' });
                 
-                // Manually clear Webflow IX2 inline styles
-                card.querySelectorAll('.card_image, .card_image img').forEach(img => {
+                card.querySelectorAll('.catalog-card_image').forEach(img => {
                     img.style.transform = '';
                     img.style.opacity = '';
                     img.style.scale = '';
@@ -59,7 +57,6 @@ export const PortfolioGallery = (() => {
             });
         }
         
-        // Unbind all event listeners and MutationObservers
         state.listeners.forEach(listener => {
             if (listener.type === 'observer') listener.fn.disconnect();
             else if (listener.el) listener.el.removeEventListener(listener.type, listener.fn);
@@ -72,7 +69,7 @@ export const PortfolioGallery = (() => {
     };
 
     const handleHover = (index, isEnter, card, visibleItems) => {
-        const hoverEl = card.querySelector('.card_hover');
+        const hoverEl = card.querySelector('.catalog-card_hover-overlay');
         if (!hoverEl || card.style.pointerEvents === 'none') return;
 
         if (isEnter) {
@@ -89,7 +86,7 @@ export const PortfolioGallery = (() => {
             }
 
             if (state.activeCardIndex !== null && state.activeCardIndex !== index) {
-                const prevHover = visibleItems[state.activeCardIndex]?.querySelector('.card_hover');
+                const prevHover = visibleItems[state.activeCardIndex]?.querySelector('.catalog-card_hover-overlay');
                 if (prevHover) {
                     gsap.to(prevHover, {
                         x: `${dirX * 100}%`, y: `${dirY * 100}%`,
@@ -134,12 +131,12 @@ export const PortfolioGallery = (() => {
         state.activeCardIndex = null;
 
         els.mainItems.forEach(item => {
-            const card = item.querySelector('.card_container');
+            const card = item.querySelector('.catalog-card_component');
             if (card) card.classList.remove('is-last-in-col');
         });
 
         visibleMain.forEach((item, i) => {
-            const card = item.querySelector('.card_container');
+            const card = item.querySelector('.catalog-card_component');
             if (!card) return;
 
             card.style.pointerEvents = 'none';
@@ -151,7 +148,7 @@ export const PortfolioGallery = (() => {
 
             const topWrapper = card.querySelector('.horizontal_line_top');
             const bottomWrapper = card.querySelector('.horizontal_line_bottom');
-            const hoverEl = card.querySelector('.card_hover');
+            const hoverEl = card.querySelector('.catalog-card_hover-overlay');
 
             const getLineParts = (wrapper) => wrapper
                 ? { c: wrapper.querySelectorAll('.line_h-c'), l: wrapper.querySelectorAll('.line_h-cap_l'), r: wrapper.querySelectorAll('.line_h-cap_r') }
@@ -159,7 +156,7 @@ export const PortfolioGallery = (() => {
 
             const top = getLineParts(topWrapper);
             const bottom = getLineParts(bottomWrapper);
-            const img = card.querySelectorAll('.card_image');
+            const img = card.querySelectorAll('.catalog-card_image');
             const text = card.querySelectorAll('.card_title, .card_category, .info_value, .card_detail');
 
             const allTargets = [...top.c, ...top.l, ...top.r, ...bottom.c, ...bottom.l, ...bottom.r, ...img, ...text];
@@ -260,7 +257,7 @@ export const PortfolioGallery = (() => {
 
         els.cards.forEach(card => {
             card.classList.toggle('is-list', isList);
-            card.querySelectorAll('.card_content, .card_title, .card_image, .card_details_container')
+            card.querySelectorAll('.catalog-card_content, .card_title, .catalog-card_image, .card_details_container')
                 .forEach(t => t.classList.toggle('is-list', isList));
         });
 
@@ -274,27 +271,27 @@ export const PortfolioGallery = (() => {
         state._lastBreakpoint = getBreakpoint(window.innerWidth);
 
         els = {
-            mainItems: Array.from(context.querySelectorAll('.w-dyn-item')),
+            mainItems: Array.from(context.querySelectorAll('.catalog-list_item')),
             yearList: context.querySelector('#year-dropdown-list'),
             catList: context.querySelector('#category-dropdown-list'),
             listBtn: context.querySelector('.list-btn'),
             gridBtn: context.querySelector('.grid-btn'),
-            dynList: context.querySelector('.w-dyn-items'),
-            cards: Array.from(context.querySelectorAll('.card_container'))
+            dynList: context.querySelector('.catalog-list_grid'),
+            cards: Array.from(context.querySelectorAll('.catalog-card_component'))
         };
 
         if (skipIntro) {
-            gsap.set(context.querySelectorAll('.card_image'), { opacity: 0 });
+            gsap.set(context.querySelectorAll('.catalog-card_image'), { opacity: 0 });
             gsap.set(context.querySelectorAll('.card_title, .card_category, .info_value, .card_detail'), { opacity: 0, y: -20 });
-            const lineCenters = context.querySelectorAll('.card_container .line_h-c');
-            const lineCapsL = context.querySelectorAll('.card_container .line_h-cap_l');
-            const lineCapsR = context.querySelectorAll('.card_container .line_h-cap_r');
+            const lineCenters = context.querySelectorAll('.catalog-card_component .line_h-c');
+            const lineCapsL = context.querySelectorAll('.catalog-card_component .line_h-cap_l');
+            const lineCapsR = context.querySelectorAll('.catalog-card_component .line_h-cap_r');
             if (lineCenters.length) gsap.set(lineCenters, { scaleX: 0 });
             if (lineCapsL.length) gsap.set(lineCapsL, { opacity: 0, left: '50%' });
             if (lineCapsR.length) gsap.set(lineCapsR, { opacity: 0, right: '50%' });
         }
 
-        // 1. Data Stamping: Extracting Webflow CMS values into attributes for filtering
+        // Data Stamping
         els.mainItems.forEach(item => {
             let colVal = '';
             item.querySelectorAll('.card_detail').forEach(detail => {
@@ -306,12 +303,11 @@ export const PortfolioGallery = (() => {
             item.setAttribute('data-cat', catVal || 'Other');
         });
 
-        // Restore view mode persistence on Barba navigation
         if (state.isListView) {
             if (els.dynList) els.dynList.classList.add('is-list');
             els.cards.forEach(card => {
                 card.classList.add('is-list');
-                card.querySelectorAll('.card_content, .card_title, .card_image, .card_details_container')
+                card.querySelectorAll('.catalog-card_content, .card_title, .catalog-card_image, .card_details_container')
                     .forEach(t => t.classList.add('is-list'));
             });
         }
@@ -369,7 +365,6 @@ export const PortfolioGallery = (() => {
         populate(els.yearList, 'year');
         populate(els.catList, 'cat');
 
-        // Observe Webflow Native Dropdown triggers for custom line animations
         const setupDropdownAnimation = (list) => {
             if (!list) return;
             const observer = new MutationObserver(mutations => {
