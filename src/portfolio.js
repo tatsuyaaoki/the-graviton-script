@@ -1,7 +1,7 @@
 /**
  * Module: Portfolio Gallery
  * Description: Manages Webflow CMS filtering, List/Grid view toggling, 
- * directional hover states, and GSAP entry animations for catalog cards.
+ * directional hover states, GSAP entry animations, and Custom Dropdown states.
  */
 
 export const PortfolioGallery = (() => {
@@ -32,10 +32,10 @@ export const PortfolioGallery = (() => {
 
     const getBreakpoint = (w) => w > 991 ? 'lg' : w > 767 ? 'md' : 'sm';
 
-    const addListener = (el, type, fn) => {
+    const addListener = (el, type, fn, options = false) => {
         if (!el) return;
-        el.addEventListener(type, fn);
-        state.listeners.push({ el, type, fn });
+        el.addEventListener(type, fn, options);
+        state.listeners.push({ el, type, fn, options });
     };
 
     const teardown = () => {
@@ -57,9 +57,8 @@ export const PortfolioGallery = (() => {
             });
         }
         
-        state.listeners.forEach(listener => {
-            if (listener.type === 'observer') listener.fn.disconnect();
-            else if (listener.el) listener.el.removeEventListener(listener.type, listener.fn);
+        state.listeners.forEach(l => {
+            if (l.el) l.el.removeEventListener(l.type, l.fn, l.options);
         });
         
         state.listeners = [];
@@ -69,7 +68,6 @@ export const PortfolioGallery = (() => {
     };
 
     const handleHover = (index, isEnter, card, visibleItems) => {
-        // Fallback checks for both new BEM and old class names
         const hoverEl = card.querySelector('.catalog-card_hover-overlay') || card.querySelector('.card_hover');
         if (!hoverEl || card.style.pointerEvents === 'none') return;
 
@@ -158,7 +156,6 @@ export const PortfolioGallery = (() => {
             const img = gsap.utils.toArray(card.querySelectorAll('.catalog-card_image, .card_image'));
             const text = gsap.utils.toArray(card.querySelectorAll('.card_title, .card_category, .info_value, .card_detail, .catalog-card_title'));
 
-            // Filter out empty arrays to prevent GSAP errors
             const allTargets = [...top.c, ...top.l, ...top.r, ...bottom.c, ...bottom.l, ...bottom.r, ...img, ...text];
             if (hoverEl) allTargets.push(hoverEl);
 
@@ -192,9 +189,149 @@ export const PortfolioGallery = (() => {
         });
     };
 
-    const updateDropdownStates = () => { /* ... (keeps existing logic) ... */ };
-    const applyFilters = () => { /* ... (keeps existing logic) ... */ };
-    const setViewMode = (isList) => { /* ... (keeps existing logic) ... */ };
+    const updateDropdownStates = () => {
+        ['year', 'cat'].forEach(type => {
+            const listEl = type === 'year' ? els.yearList : els.catList;
+            if (!listEl) return;
+
+            listEl.querySelectorAll('.w-dropdown-link').forEach(link => {
+                const val = link.innerText;
+                const isActive = val === (type === 'year' ? state.activeYear : state.activeCat);
+                let exists = true;
+
+                if (val !== 'All') {
+                    exists = els.mainItems.some(item => {
+                        const itemYear = item.getAttribute('data-col');
+                        const itemCat = item.getAttribute('data-cat');
+                        return type === 'year'
+                            ? itemYear === val && (state.activeCat === 'All' || itemCat === state.activeCat)
+                            : itemCat === val && (state.activeYear === 'All' || itemYear === state.activeYear);
+                    });
+                }
+
+                if (isActive) {
+                    link.dataset.state = 'active';
+                    link.style.pointerEvents = 'auto';
+                    link.style.cursor = 'pointer';
+                    gsap.to(link, { color: CONFIG.colors.primary, opacity: 1, duration: 0.2, overwrite: 'auto' });
+                } else if (!exists) {
+                    link.dataset.state = 'disabled';
+                    link.style.pointerEvents = 'none';
+                    link.style.cursor = 'default';
+                    gsap.to(link, { color: CONFIG.colors.disabledGrey, opacity: 0.5, duration: 0.2, overwrite: 'auto' });
+                } else {
+                    link.dataset.state = 'default';
+                    link.style.pointerEvents = 'auto';
+                    link.style.cursor = 'pointer';
+                    gsap.to(link, { color: CONFIG.colors.activeWhite, opacity: 1, duration: 0.2, overwrite: 'auto' });
+                }
+            });
+        });
+    };
+
+    const applyFilters = () => {
+        els.mainItems.forEach(item => {
+            const year = item.getAttribute('data-col');
+            const cat = item.getAttribute('data-cat');
+            const isVisible = (state.activeYear === 'All' || year === state.activeYear) &&
+                              (state.activeCat === 'All' || cat === state.activeCat);
+            item.style.display = isVisible ? 'block' : 'none';
+        });
+        updateDropdownStates();
+
+        requestAnimationFrame(() => {
+            if (!state.isTransitioning) {
+                playCardAnimations();
+                setTimeout(() => window.ScrollTrigger?.refresh(), 450);
+            }
+        });
+    };
+
+    const setViewMode = (isList) => {
+        if (state.isListView === isList) return;
+        state.isListView = isList;
+
+        if (els.listBtn) els.listBtn.classList.toggle('is-hidden', isList);
+        if (els.gridBtn) els.gridBtn.classList.toggle('is-hidden', !isList);
+        if (els.dynList) els.dynList.classList.toggle('is-list', isList);
+
+        els.cards.forEach(card => {
+            card.classList.toggle('is-list', isList);
+            card.querySelectorAll('.catalog-card_content, .card_title, .catalog-card_image, .card_details_container')
+                .forEach(t => t.classList.toggle('is-list', isList));
+        });
+
+        applyFilters();
+    };
+
+    // --- NEW: Custom Dropdown Controller ---
+    const setupCustomDropdowns = (context) => {
+        const dropdownWrappers = context.querySelectorAll('.w-dropdown');
+        
+        dropdownWrappers.forEach(dropdown => {
+            const toggle = dropdown.querySelector('.w-dropdown-toggle');
+            const list = dropdown.querySelector('.w-dropdown-list');
+            if (!toggle || !list) return;
+
+            // Pre-hide all lists via GSAP so they don't pop open
+            gsap.set(list, { display: 'none', opacity: 0, y: -10 });
+            dropdown.dataset.customOpen = 'false';
+
+            const handleToggleClick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const isOpen = dropdown.dataset.customOpen === 'true';
+
+                // Close all other dropdowns
+                dropdownWrappers.forEach(other => {
+                    if (other !== dropdown && other.dataset.customOpen === 'true') {
+                        const otherList = other.querySelector('.w-dropdown-list');
+                        gsap.to(otherList, { opacity: 0, y: -10, duration: 0.2, onComplete: () => gsap.set(otherList, { display: 'none' }) });
+                        other.dataset.customOpen = 'false';
+                    }
+                });
+
+                if (!isOpen) {
+                    // Open logic
+                    gsap.set(list, { display: 'block' });
+                    
+                    const tl = gsap.timeline();
+                    tl.to(list, { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out' });
+
+                    // Internal decorative line animation
+                    const cLine = list.querySelector('.line_h-c');
+                    const lCap = list.querySelector('.line_h-cap_l');
+                    const rCap = list.querySelector('.line_h-cap_r');
+                    if (cLine && lCap && rCap) {
+                        gsap.set(cLine, { scaleX: 0 });
+                        gsap.set([lCap, rCap], { opacity: 0 });
+                        tl.to([lCap, rCap], { opacity: 1, duration: 0.3 }, 0)
+                          .to(cLine, { scaleX: 1, duration: 0.3, ease: 'power2.out' }, 0.1);
+                    }
+                    dropdown.dataset.customOpen = 'true';
+                } else {
+                    // Close logic
+                    gsap.to(list, { opacity: 0, y: -10, duration: 0.2, onComplete: () => gsap.set(list, { display: 'none' }) });
+                    dropdown.dataset.customOpen = 'false';
+                }
+            };
+
+            addListener(toggle, 'click', handleToggleClick);
+        });
+
+        // Global click-outside listener to close dropdowns
+        const handleOutsideClick = (e) => {
+            dropdownWrappers.forEach(dropdown => {
+                if (dropdown.dataset.customOpen === 'true' && !dropdown.contains(e.target)) {
+                    const list = dropdown.querySelector('.w-dropdown-list');
+                    gsap.to(list, { opacity: 0, y: -10, duration: 0.2, onComplete: () => gsap.set(list, { display: 'none' }) });
+                    dropdown.dataset.customOpen = 'false';
+                }
+            });
+        };
+        addListener(document, 'click', handleOutsideClick);
+    };
 
     const init = (context, skipIntro = false) => {
         if (state._initialised) teardown();
@@ -213,7 +350,6 @@ export const PortfolioGallery = (() => {
         };
 
         if (skipIntro) {
-            // FIX: Safely convert node lists to arrays and check length before setting GSAP
             const images = gsap.utils.toArray(context.querySelectorAll('.catalog-card_image, .card_image'));
             if(images.length) gsap.set(images, { opacity: 0 });
 
@@ -229,7 +365,6 @@ export const PortfolioGallery = (() => {
             if (lineCapsR.length) gsap.set(lineCapsR, { opacity: 0, right: '50%' });
         }
 
-        // Data Stamping
         els.mainItems.forEach(item => {
             let colVal = '';
             item.querySelectorAll('.card_detail').forEach(detail => {
@@ -240,6 +375,96 @@ export const PortfolioGallery = (() => {
             item.setAttribute('data-col', colVal || 'Other');
             item.setAttribute('data-cat', catVal || 'Other');
         });
+
+        if (state.isListView) {
+            if (els.dynList) els.dynList.classList.add('is-list');
+            els.cards.forEach(card => {
+                card.classList.add('is-list');
+                card.querySelectorAll('.catalog-card_content, .card_title, .catalog-card_image, .card_details_container')
+                    .forEach(t => t.classList.add('is-list'));
+            });
+        }
+
+        // BIND VIEW MODE BUTTONS
+        if (els.listBtn) {
+            addListener(els.listBtn, 'click', () => setViewMode(true));
+            els.listBtn.classList.toggle('is-hidden', state.isListView);
+        }
+        if (els.gridBtn) {
+            addListener(els.gridBtn, 'click', () => setViewMode(false));
+            els.gridBtn.classList.toggle('is-hidden', !state.isListView);
+        }
+
+        const populate = (listEl, type, dropdownWrapper) => {
+            if (!listEl) return;
+            const vals = new Set(['All']);
+            els.mainItems.forEach(item => vals.add(item.getAttribute(type === 'year' ? 'data-col' : 'data-cat')));
+
+            const decorativeLine = listEl.querySelector('.line-horizontal');
+            listEl.innerHTML = '';
+
+            vals.forEach(v => {
+                if (!v) return;
+                const a = document.createElement('a');
+                a.className = 'w-dropdown-link';
+                a.innerText = v;
+                a.style.cursor = 'pointer';
+
+                addListener(a, 'mouseenter', () => {
+                    if (a.dataset.state === 'default') gsap.to(a, { color: CONFIG.colors.contrast, duration: 0.2, ease: 'power2.out', overwrite: 'auto' });
+                });
+                addListener(a, 'mouseleave', () => {
+                    if (a.dataset.state === 'default') gsap.to(a, { color: CONFIG.colors.activeWhite, duration: 0.2, ease: 'power2.out', overwrite: 'auto' });
+                });
+                addListener(a, 'click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (type === 'year') state.activeYear = v;
+                    else state.activeCat = v;
+
+                    const btn = dropdownWrapper.querySelector('.card_filter_title');
+                    if (btn) btn.innerText = v === 'All' ? (type === 'year' ? 'Collection' : 'Category') : v;
+
+                    applyFilters();
+
+                    // Close dropdown upon selection
+                    gsap.to(listEl, { opacity: 0, y: -10, duration: 0.2, onComplete: () => gsap.set(listEl, { display: 'none' }) });
+                    dropdownWrapper.dataset.customOpen = 'false';
+                });
+
+                listEl.appendChild(a);
+            });
+
+            if (decorativeLine) listEl.appendChild(decorativeLine);
+        };
+
+        const yearWrapper = context.querySelector('#filter_item_1');
+        const catWrapper = context.querySelector('#filter_item_2');
+
+        populate(els.yearList, 'year', yearWrapper);
+        populate(els.catList, 'cat', catWrapper);
+
+        // INITIALIZE CUSTOM DROPDOWNS INSTEAD OF WEBFLOW NATIVE
+        setupCustomDropdowns(context);
+
+        const handleResize = () => {
+            if (state.isTransitioning) return;
+            const bp = getBreakpoint(window.innerWidth);
+            if (bp === state._lastBreakpoint) return;
+            state._lastBreakpoint = bp;
+            clearTimeout(state.resizeTimer);
+            state.resizeTimer = setTimeout(() => playCardAnimations(), 200);
+        };
+        window.addEventListener('resize', handleResize);
+        state.listeners.push({ el: window, type: 'resize', fn: handleResize });
+
+        els.mainItems.forEach(item => {
+            const year = item.getAttribute('data-col');
+            const cat = item.getAttribute('data-cat');
+            const isVisible = (state.activeYear === 'All' || year === state.activeYear) && (state.activeCat === 'All' || cat === state.activeCat);
+            item.style.display = isVisible ? 'block' : 'none';
+        });
+        updateDropdownStates();
 
         if (!skipIntro) {
             requestAnimationFrame(() => {
