@@ -26,13 +26,15 @@ function bootstrapCanvas() {
 bootstrapCanvas();
 
 /* ==========================================================================
-   2. DESKTOP BACKGROUND HOVER TRIGGERS
+   2. DESKTOP BACKGROUND HOVER TRIGGERS (Patched for Text Nodes)
    ========================================================================== */
-document.addEventListener('mouseenter', (e) => {
-    if (window.innerWidth > 991 && e.target.closest('.catalog-card_component')) {
+document.addEventListener('mouseover', (e) => {
+    // FIX: Verify e.target is an actual Element before running .closest()
+    if (window.innerWidth > 991 && e.target instanceof Element && e.target.closest('.catalog-card_component')) {
+        // Future Hex Shader Trigger goes here
         devLog('[GRV:HEX] Card hovered - Hex background engaged');
     }
-}, true);
+});
 
 /* ==========================================================================
    3. BARBA.JS PAGE TRANSITIONS 
@@ -90,7 +92,6 @@ function initBarba() {
                 const headerEl = document.querySelector('.header');
                 const headerH = headerEl ? headerEl.offsetHeight : 50;
 
-                // 1. Gather the fresh header elements for entry animation
                 const headerTargets = [
                     c.querySelector('#vertical_line_filter_1'),
                     c.querySelector('#filter_item_1'),
@@ -103,26 +104,32 @@ function initBarba() {
                     c.querySelector('#vertical_line_view_3')
                 ].filter(Boolean);
 
-                // 2. Reset positions: Slide container right, hide header items
+                // Reset container position
                 gsap.set(c, { position: 'fixed', top: headerH, left: 0, width: '100vw', zIndex: 2, x: '100vw', opacity: 0 });
                 if (headerTargets.length) gsap.set(headerTargets, { opacity: 0, x: 20 });
 
-                // 3. HARD RESTART WEBFLOW: Vital for Dropdowns to function post-transition
+                // 1. INIT PORTFOLIO LOGIC FIRST (Builds new dropdown HTML based on CMS)
+                if (c.querySelector('.catalog-list_item')) {
+                    PortfolioGallery.init(c, true);
+                }
+
+                // 2. HARD RESTART WEBFLOW AFTER HTML IS BUILT
                 try {
                     if (window.Webflow) {
-                        window.Webflow.destroy(); // Kill old listeners
-                        window.Webflow.ready();   // Bind to new HTML
-                        window.Webflow.require('ix2')?.init();
+                        window.Webflow.destroy(); 
+                        window.Webflow.ready();   
+                        
+                        // Explicitly command Webflow to wake up dropdowns and interactions
+                        if (window.Webflow.require('dropdown')) window.Webflow.require('dropdown').ready();
+                        if (window.Webflow.require('ix2')) window.Webflow.require('ix2').init();
+                        
                         document.dispatchEvent(new Event('readystatechange'));
-                        window.dispatchEvent(new Event('resize'));
-                        if (window.ScrollTrigger) ScrollTrigger.refresh();
                     }
-                    if (c.querySelector('.catalog-list_item')) PortfolioGallery.init(c, true);
                 } catch (e) {
                     devLog('BARBA: enter init error:', e);
                 }
 
-                // 4. Master Entry Timeline
+                // 3. MASTER ENTRY TIMELINE
                 const tl = gsap.timeline({
                     delay: 0.1,
                     onComplete: () => {
@@ -133,18 +140,12 @@ function initBarba() {
                     }
                 });
 
-                // Slide page in
                 tl.to(c, { x: '0vw', opacity: 1, duration: 0.7, ease: "power3.out" });
 
-                // Cascade header items in from Left-to-Right
                 if(headerTargets.length) {
                     tl.to(headerTargets, { 
-                        opacity: 1, 
-                        x: 0, 
-                        stagger: 0.05, 
-                        duration: 0.4, 
-                        ease: "power2.out", 
-                        clearProps: "opacity,x" // Clean up inline styles so they don't break flexbox
+                        opacity: 1, x: 0, stagger: 0.05, duration: 0.4, ease: "power2.out", 
+                        clearProps: "opacity,x" 
                     }, "-=0.3");
                 }
             }
