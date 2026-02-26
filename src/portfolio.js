@@ -87,9 +87,9 @@ export const PortfolioGallery = (() => {
             const startX = dir * 30; 
             const startTime = i * CONFIG.timing.cardIntroStagger; 
 
-            if(top.c.length) gsap.set([top.c, bottom.c], { scaleX: 0 });
-            if(top.l.length) gsap.set([top.l, bottom.l], { left: '50%', opacity: 0 });
-            if(top.r.length) gsap.set([top.r, bottom.r], { right: '50%', opacity: 0 });
+            if(top.c.length) gsap.set([top.c, bottom.c], { scaleX: 0, transformOrigin: 'center center' });
+            if(top.l.length) gsap.set([top.l, bottom.l], { left: '50%', opacity: 0, xPercent: -50 });
+            if(top.r.length) gsap.set([top.r, bottom.r], { right: '50%', opacity: 0, xPercent: 50 });
 
             if(top.l.length) masterTl.fromTo(top.l, { left: '50%', opacity: 0 }, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
             if(top.r.length) masterTl.fromTo(top.r, { right: '50%', opacity: 0 }, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, startTime);
@@ -151,7 +151,6 @@ export const PortfolioGallery = (() => {
         updateDropdownStates();
         requestAnimationFrame(() => {
             if (!state.isTransitioning) {
-                // If filtering during active view, instantly fire card animations
                 const tl = gsap.timeline();
                 playCardAnimations(tl, 1);
                 setTimeout(() => window.ScrollTrigger?.refresh(), 450);
@@ -203,7 +202,8 @@ export const PortfolioGallery = (() => {
                     const lCap = list.querySelector('.line_h-cap_l');
                     const rCap = list.querySelector('.line_h-cap_r');
                     if (cLine && lCap && rCap) {
-                        gsap.set(cLine, { scaleX: 0 }); gsap.set([lCap, rCap], { opacity: 0 });
+                        gsap.set(cLine, { scaleX: 0, transformOrigin: 'center center' }); 
+                        gsap.set([lCap, rCap], { opacity: 0 });
                         tl.to([lCap, rCap], { opacity: 1, duration: 0.3 }, 0).to(cLine, { scaleX: 1, duration: 0.3, ease: 'power2.out' }, 0.1);
                     }
                     dropdown.dataset.customOpen = 'true';
@@ -261,18 +261,17 @@ export const PortfolioGallery = (() => {
             cards: Array.from(context.querySelectorAll('.catalog-card_component'))
         };
 
-        // BUG FIX: Text splitting must happen on EVERY load, regardless of skipIntro
         const p = context.querySelector('.header_paragraph');
         if(p) splitTextNodes(p);
 
         if (skipIntro) {
-            gsap.set(context.querySelectorAll('header .line_v-c'), { scaleY: 0 });
-            gsap.set(context.querySelectorAll('header .line_v-cap_t'), { opacity: 0, top: '50%' });
-            gsap.set(context.querySelectorAll('header .line_v-cap_b'), { opacity: 0, bottom: '50%' });
+            gsap.set(context.querySelectorAll('header .line_v-c'), { scaleY: 0, transformOrigin: 'center center' });
+            gsap.set(context.querySelectorAll('header .line_v-cap_t'), { opacity: 0, top: '50%', yPercent: -50 });
+            gsap.set(context.querySelectorAll('header .line_v-cap_b'), { opacity: 0, bottom: '50%', yPercent: 50 });
 
-            gsap.set(context.querySelectorAll('header .line_h-c, .catalog-card_component .line_h-c'), { scaleX: 0 });
-            gsap.set(context.querySelectorAll('header .line_h-cap_l, .catalog-card_component .line_h-cap_l'), { opacity: 0, left: '50%' });
-            gsap.set(context.querySelectorAll('header .line_h-cap_r, .catalog-card_component .line_h-cap_r'), { opacity: 0, right: '50%' });
+            gsap.set(context.querySelectorAll('header .line_h-c, .catalog-card_component .line_h-c'), { scaleX: 0, transformOrigin: 'center center' });
+            gsap.set(context.querySelectorAll('header .line_h-cap_l, .catalog-card_component .line_h-cap_l'), { opacity: 0, left: '50%', xPercent: -50 });
+            gsap.set(context.querySelectorAll('header .line_h-cap_r, .catalog-card_component .line_h-cap_r'), { opacity: 0, right: '50%', xPercent: 50 });
 
             gsap.set(context.querySelectorAll('.catalog-card_image, .catalog-card_content, .card_details_container'), { opacity: 0 });
 
@@ -282,6 +281,7 @@ export const PortfolioGallery = (() => {
                 context.querySelector('#vertical_line_filter_3'), context.querySelector('#vertical_line_view_2'),
                 context.querySelector('.list-btn'), context.querySelector('.grid-btn'), context.querySelector('#vertical_line_view_3')
             ].filter(Boolean);
+            
             if (headerTargets.length) {
                 const startX = overrideDir * 30;
                 gsap.set(headerTargets, { opacity: 0, x: startX });
@@ -366,7 +366,6 @@ export const PortfolioGallery = (() => {
         const p = context.querySelector('.header_paragraph');
         if (p) {
             const chars = gsap.utils.toArray(p.querySelectorAll('span'));
-            // BUG FIX: Ensure chars array is not empty before animating
             if (chars.length > 0) {
                 masterTl.fromTo(chars, { opacity: 0 }, { opacity: 1, duration: 0.05, stagger: 0.02, ease: "none" }, 0);
             }
