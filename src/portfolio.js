@@ -1,14 +1,12 @@
 /**
  * Module: Portfolio Gallery
  * Description: Manages Spatial Entrance Sequences, Filtering, and Dropdowns.
- * Update: Added explicit context passing and debug logs.
  */
 
 export const PortfolioGallery = (() => {
     const state = { activeYear: 'All', activeCat: 'All', activeCardIndex: null, lastPos: null, isListView: false, listeners: [], _initialised: false, _hoverFadeTimer: null, resizeTimer: null, isTransitioning: false, _lastBreakpoint: null };
-    const CONFIG = { timing: { cardIntroDelay: 0, cardIntroStagger: 0.1, maxDelay: 0.5 }, styling: { lineDuration: 0.5, textDuration: 0.4, textStagger: 0.08, imageFadeDuration: 0.6, easeMain: 'power2.out', easeLines: 'expo.inOut' }, colors: { primary: 'var(--grv-primary, #0d9488)', contrast: 'var(--grv-contrast, #e2572b)', activeWhite: 'rgba(255, 255, 255, 1)', disabledGrey: 'rgba(255, 255, 255, 0.25)' } };
+    const CONFIG = { timing: { cardIntroDelay: 0, cardIntroStagger: 0.15, maxDelay: 0.8 }, styling: { lineDuration: 0.4, textDuration: 0.5, textStagger: 0.1, imageFadeDuration: 0.6, easeMain: 'power3.out', easeLines: 'power2.inOut' }, colors: { primary: 'var(--grv-primary, #0d9488)', contrast: 'var(--grv-contrast, #e2572b)', activeWhite: 'rgba(255, 255, 255, 1)', disabledGrey: 'rgba(255, 255, 255, 0.25)' } };
     
-    // Quick debug logger inside module
     const devLog = (...args) => { if (window.location.hostname === 'localhost' || window.location.hostname.includes('webflow.io')) console.log(...args); };
     let els = {};
 
@@ -20,7 +18,7 @@ export const PortfolioGallery = (() => {
         if (els && els.cards) { 
             els.cards.forEach(card => { 
                 const allEls = gsap.utils.toArray(card.querySelectorAll('*')); 
-                if(allEls.length) { gsap.killTweensOf(allEls); gsap.set(allEls, { clearProps: 'all' }); } 
+                if(allEls.length) { gsap.killTweensOf(allEls); gsap.set(allEls, { clearProps: 'opacity,x,transform,clipPath' }); } 
                 card.querySelectorAll('.catalog-card_image').forEach(img => { img.style.transform = ''; img.style.opacity = ''; img.style.scale = ''; }); 
                 card.style.pointerEvents = ''; 
             }); 
@@ -63,8 +61,6 @@ export const PortfolioGallery = (() => {
         cols = Math.min(cols, visibleMain.length);
         state.activeCardIndex = null;
 
-        devLog(`[GRV:DEBUG] Animating ${visibleMain.length} visible cards. Direction: ${dir}`);
-
         els.mainItems.forEach(item => { const card = item.querySelector('.catalog-card_component'); if (card) card.classList.remove('is-last-in-col'); });
 
         visibleMain.forEach((item, i) => {
@@ -78,32 +74,32 @@ export const PortfolioGallery = (() => {
 
             const topWrapper = card.querySelector('.horizontal_line_top');
             const bottomWrapper = card.querySelector('.horizontal_line_bottom');
-            const hoverEl = card.querySelector('.catalog-card_hover-overlay');
-
+            
             const getLineParts = (wrapper) => wrapper ? { c: gsap.utils.toArray(wrapper.querySelectorAll('.line_h-c')), l: gsap.utils.toArray(wrapper.querySelectorAll('.line_h-cap_l')), r: gsap.utils.toArray(wrapper.querySelectorAll('.line_h-cap_r')) } : { c: [], l: [], r: [] };
-
             const top = getLineParts(topWrapper);
             const bottom = getLineParts(bottomWrapper);
+            
+            // Your exact requested sequence
             const img = gsap.utils.toArray(card.querySelectorAll('.catalog-card_image'));
-            const text = gsap.utils.toArray(card.querySelectorAll('.card_title, .card_category, .info_value, .card_detail'));
+            const content = gsap.utils.toArray(card.querySelectorAll('.catalog-card_content'));
+            const details = gsap.utils.toArray(card.querySelectorAll('.card_details_container'));
+            const hoverEl = card.querySelector('.catalog-card_hover-overlay');
 
-            const allTargets = [...top.c, ...top.l, ...top.r, ...bottom.c, ...bottom.l, ...bottom.r, ...img, ...text];
-            if (hoverEl) allTargets.push(hoverEl);
+            const startX = dir * 40; 
 
-            if(allTargets.length) { gsap.killTweensOf(allTargets); gsap.set(allTargets, { clearProps: 'all' }); }
-
-            const startX = dir * 30; 
-
+            // Safely reset states without breaking Flexbox
             if(top.c.length) gsap.set([top.c, bottom.c], { scaleX: 0 });
             if(top.l.length) gsap.set([top.l, bottom.l], { left: '50%', opacity: 0 });
             if(top.r.length) gsap.set([top.r, bottom.r], { right: '50%', opacity: 0 });
-            if(img.length) gsap.set(img, { opacity: 0 });
-            if(text.length) gsap.set(text, { opacity: 0, x: startX }); 
+            if(img.length) gsap.set(img, { opacity: 0, x: startX });
+            if(content.length) gsap.set(content, { opacity: 0, x: startX });
+            if(details.length) gsap.set(details, { opacity: 0, x: startX });
             if(hoverEl) gsap.set(hoverEl, { display: 'none', opacity: 0 });
 
             const delay = Math.min(CONFIG.timing.cardIntroDelay + i * CONFIG.timing.cardIntroStagger, CONFIG.timing.maxDelay);
             const tl = gsap.timeline({ delay, onComplete: () => { card.style.pointerEvents = 'auto'; } });
 
+            // 1. Horizontal Lines First
             if(top.l.length) tl.to(top.l, { left: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0);
             if(top.r.length) tl.to(top.r, { right: '0%', opacity: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0);
             if(top.c.length) tl.to(top.c, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0.2);
@@ -114,15 +110,17 @@ export const PortfolioGallery = (() => {
                 if(bottom.c.length) tl.to(bottom.c, { scaleX: 1, duration: CONFIG.styling.lineDuration, ease: CONFIG.styling.easeLines }, 0.2);
             }
 
-            if(img.length) tl.to(img, { opacity: 1, duration: CONFIG.styling.imageFadeDuration, ease: 'none' }, 0.3);
-            if(text.length) tl.to(text, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, stagger: CONFIG.styling.textStagger, ease: CONFIG.styling.easeMain }, 0.4);
+            // 2. Image -> 3. Content -> 4. Details (Staggered respecting direction)
+            tl.to(img, { opacity: 1, x: 0, duration: CONFIG.styling.imageFadeDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, 0.3);
+            tl.to(content, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, 0.4);
+            tl.to(details, { opacity: 1, x: 0, duration: CONFIG.styling.textDuration, ease: CONFIG.styling.easeMain, clearProps: 'x' }, 0.5);
         });
     };
 
     const updateDropdownStates = () => { /* ... */ };
     const applyFilters = () => { /* ... */ };
     const setViewMode = (isList) => { /* ... */ };
-    const setupCustomDropdowns = (context) => { /* ... omitted for brevity ... */ };
+    const setupCustomDropdowns = (context) => { /* ... */ };
 
     const init = (context, skipIntro = false, overrideDir = 1) => {
         if (state._initialised) teardown();
@@ -141,7 +139,6 @@ export const PortfolioGallery = (() => {
         };
 
         if (skipIntro) {
-            devLog(`[GRV:DEBUG] skipIntro is TRUE. Pre-hiding elements in context.`);
             gsap.set(context.querySelectorAll('.header_paragraph'), { opacity: 0 });
             gsap.set(context.querySelectorAll('.catalog-header_heading .line_v-c'), { scaleY: 0 });
             gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c'), { scaleX: 0 });
@@ -149,21 +146,18 @@ export const PortfolioGallery = (() => {
             gsap.set(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r'), { opacity: 0, right: '50%' });
 
             const images = gsap.utils.toArray(context.querySelectorAll('.catalog-card_image'));
+            const textEls = gsap.utils.toArray(context.querySelectorAll('.catalog-card_content, .card_details_container'));
             if(images.length) gsap.set(images, { opacity: 0 });
-
-            const textEls = gsap.utils.toArray(context.querySelectorAll('.card_title, .card_category, .info_value, .card_detail'));
             if(textEls.length) gsap.set(textEls, { opacity: 0 }); 
 
             const lineCenters = gsap.utils.toArray(context.querySelectorAll('.catalog-card_component .line_h-c'));
             const lineCapsL = gsap.utils.toArray(context.querySelectorAll('.catalog-card_component .line_h-cap_l'));
             const lineCapsR = gsap.utils.toArray(context.querySelectorAll('.catalog-card_component .line_h-cap_r'));
-            
             if (lineCenters.length) gsap.set(lineCenters, { scaleX: 0 });
             if (lineCapsL.length) gsap.set(lineCapsL, { opacity: 0, left: '50%' });
             if (lineCapsR.length) gsap.set(lineCapsR, { opacity: 0, right: '50%' });
         }
 
-        // Data stamping...
         els.mainItems.forEach(item => {
             let colVal = '';
             item.querySelectorAll('.card_detail').forEach(detail => {
@@ -177,64 +171,29 @@ export const PortfolioGallery = (() => {
 
         if (!skipIntro) {
             requestAnimationFrame(() => {
-                devLog(`[GRV:DEBUG] Direct load detected. Firing playIntro immediately.`);
                 playIntro(context, overrideDir); 
                 setTimeout(() => window.ScrollTrigger?.refresh(), 450);
             });
         }
     };
 
-    // --- SPATIAL INTRO SEQUENCE (Now Requires Context) ---
     const playIntro = (context, dir = 1) => {
-        devLog(`[GRV:DEBUG] playIntro executing. Context defined: ${!!context}`);
         state.isTransitioning = false;
         const tl = gsap.timeline();
 
-        // Target ONLY inside the injected context
+        // 1. Title Vertical Line 
         const vLine = context.querySelector('.catalog-header_heading .line_v-c');
-        if (vLine) {
-            tl.to(vLine, { scaleY: 1, duration: 0.5, ease: "power2.out" }, 0);
-            devLog(`[GRV:DEBUG] Animating Title V-Line.`);
-        }
+        if (vLine) tl.to(vLine, { scaleY: 1, duration: 0.5, ease: "power2.out" }, 0);
 
+        // 2. Paragraph CSS Clip-Path Typewriter
         const p = context.querySelector('.header_paragraph');
         if (p) {
             gsap.set(p, { opacity: 1 }); 
             const clipStart = dir === 1 ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)';
             gsap.fromTo(p, { clipPath: clipStart }, { clipPath: 'inset(0 0% 0 0)', duration: 1.0, ease: "steps(30)" }, 0.2);
-            devLog(`[GRV:DEBUG] Animating Paragraph Typewriter.`);
         }
 
+        // 3. Card Header Main Horizontal Lines
         const headerHCenters = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-c'));
         const headerHL = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_l'));
-        const headerHR = gsap.utils.toArray(context.querySelectorAll('.card_header > .line-horizontal > .line_h-cap_r'));
-        
-        if (headerHL.length) tl.to(headerHL, { left: '0%', opacity: 1, duration: 0.5, ease: "power2.out" }, 0.4);
-        if (headerHR.length) tl.to(headerHR, { right: '0%', opacity: 1, duration: 0.5, ease: "power2.out" }, 0.4);
-        if (headerHCenters.length) tl.to(headerHCenters, { scaleX: 1, duration: 0.5, ease: "power2.out" }, 0.6);
-
-        const headerTargets = [
-            context.querySelector('#vertical_line_filter_1'),
-            context.querySelector('#filter_item_1'),
-            context.querySelector('#vertical_line_filter_2'),
-            context.querySelector('#filter_item_2'),
-            context.querySelector('#vertical_line_filter_3'),
-            context.querySelector('#vertical_line_view_2'),
-            context.querySelector('.list-btn'),
-            context.querySelector('.grid-btn'),
-            context.querySelector('#vertical_line_view_3')
-        ].filter(Boolean);
-
-        if (headerTargets.length) {
-            const targets = dir === -1 ? [...headerTargets].reverse() : headerTargets;
-            const startX = dir * 30; 
-            gsap.set(targets, { x: startX, opacity: 0 });
-            tl.to(targets, { opacity: 1, x: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }, 0.8);
-            devLog(`[GRV:DEBUG] Animating ${headerTargets.length} header elements.`);
-        }
-
-        tl.add(() => playCardAnimations(dir), 1.0);
-    };
-
-    return { init, teardown, playIntro };
-})();
+        const headerHR = gsap.utils.toArray
