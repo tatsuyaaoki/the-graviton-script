@@ -26,13 +26,21 @@ function bootstrapCanvas() {
 bootstrapCanvas();
 
 /* ==========================================================================
-   2. DESKTOP BACKGROUND HOVER TRIGGERS (Patched for Text Nodes)
+   2. DESKTOP BACKGROUND HOVER TRIGGERS (Bulletproofed)
    ========================================================================== */
 document.addEventListener('mouseover', (e) => {
-    // FIX: Verify e.target is an actual Element before running .closest()
-    if (window.innerWidth > 991 && e.target instanceof Element && e.target.closest('.catalog-card_component')) {
-        // Future Hex Shader Trigger goes here
-        devLog('[GRV:HEX] Card hovered - Hex background engaged');
+    // 1. Ensure we are on desktop
+    if (window.innerWidth <= 991) return;
+
+    // 2. Safely check if the target has the .closest method
+    if (e.target && typeof e.target.closest === 'function') {
+        // 3. Look for the card component
+        const card = e.target.closest('.catalog-card_component');
+        
+        if (card) {
+            // Future Hex Shader Trigger goes here
+            devLog('[GRV:HEX] Card hovered - Hex background engaged');
+        }
     }
 });
 
